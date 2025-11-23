@@ -1,0 +1,143 @@
+Build a complete Android app called “FiberTrace” for fiber technicians. Include the following modules and features:
+
+1. Authentication
+
+Login with email/phone + password
+
+Roles: Technician, Team Leader, Manager
+
+Offline login after first sync
+
+Local secure token storage
+
+2. Dashboard
+
+Modern dark UI with neon-blue accents + fiber-optic background
+
+Cards: New Job, Resume Job, Fiber Map, Inventory, Reports, Clients, Billing, Settings
+
+Top bar: profile photo, notifications, cloud sync icon
+
+3. Job Management
+
+Create job: client name, phone, GPS auto-location, job type (Install/Repair/Splice/Survey), notes, cable used, materials, images (before/after)
+
+Offline-first saving and background auto-sync
+
+Attach multiple photos (compressed)
+
+Resume or edit saved jobs
+
+4. Fiber Mapping
+
+Map view (Google Maps or OSM)
+
+Draw and save fiber routes + markers
+
+Show technician location
+
+Show nearby faults and client coordinates
+
+Support offline map tiles
+
+5. Bluetooth Meter Integration (BLE)
+
+Scan, connect, disconnect
+
+Read OTDR/power meter data: dBm loss, distance, events
+
+Parse response data
+
+Auto-fill readings into splitter, node, and fiber-link records
+
+Store readings per job
+
+Display charts and event markers
+
+6. Inventory & Tools
+
+Items: drop cable, splitters, connectors, ONUs, routers, tools
+
+Add, remove, update quantity
+
+Track usage per job
+
+Device condition + status (working/faulty/in service)
+
+Low-stock alerts
+
+7. Client Records
+
+Add clients
+
+Installation history
+
+Fiber route link
+
+Payments status
+
+Assigned package
+
+8. Billing & Packages
+
+Packages: Bronze/Silver/Gold etc.
+
+Invoice generator (PDF)
+
+Status: Paid/Pending/Overdue
+
+9. Reports
+
+Daily summary, jobs done, pending, reading logs
+
+Data trends: signal level line graph, stock bar graph, distribution pie chart
+
+Export as PDF/CSV
+
+Email share option
+
+10. Cloud Syncing
+
+Sync all modules to a central server: jobs, images, readings, clients, inventory, billing
+
+Manual and auto-sync toggles
+
+Conflict handling and merging
+
+11. UI Requirements
+
+Clean, modern, animated UI
+
+Dark mode default
+
+Neon-blue highlights
+
+Background: fiber-optic strands or dark tech gradient
+
+Rounded components + smooth transitions
+
+Icons for all modules (jobs, map, meter, inventory, reports, client, billing, sync)
+
+12. App Architecture
+Generate:
+
+All screens
+
+Navigation structure
+
+Local storage (SQLite)
+
+Cloud sync service stubs
+
+BLE manager
+
+Map component
+
+PDF generator
+
+Error/loading states
+
+Reusable components (cards, buttons, forms)
+
+13. Output Requirements
+Produce full code, assets, models, services, UI layout
