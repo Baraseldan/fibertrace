@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { inventoryApi } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,8 +13,13 @@ import {
   Search
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { UseItemModal, RestockModal } from "@/components/InventoryModals";
 
 export default function Inventory() {
+  const [useModalOpen, setUseModalOpen] = useState(false);
+  const [restockModalOpen, setRestockModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+
   const { data: inventory = [], isLoading } = useQuery({
     queryKey: ['inventory'],
     queryFn: inventoryApi.getAll,
@@ -83,10 +89,28 @@ export default function Inventory() {
                 </div>
 
                 <div className="flex gap-2 pt-2">
-                  <Button variant="outline" size="sm" className="flex-1 h-8 text-xs border-white/10 hover:bg-white/5">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1 h-8 text-xs border-white/10 hover:bg-white/5"
+                    onClick={() => {
+                      setSelectedItem(item);
+                      setUseModalOpen(true);
+                    }}
+                    data-testid={`button-use-${item.id}`}
+                  >
                     <Minus className="h-3 w-3 mr-1" /> Use
                   </Button>
-                  <Button variant="outline" size="sm" className="flex-1 h-8 text-xs border-white/10 hover:bg-white/5">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1 h-8 text-xs border-white/10 hover:bg-white/5"
+                    onClick={() => {
+                      setSelectedItem(item);
+                      setRestockModalOpen(true);
+                    }}
+                    data-testid={`button-restock-${item.id}`}
+                  >
                     <Plus className="h-3 w-3 mr-1" /> Restock
                   </Button>
                 </div>
@@ -110,6 +134,24 @@ export default function Inventory() {
           </Card>
         )}
       </div>
+
+      {selectedItem && (
+        <>
+          <UseItemModal
+            open={useModalOpen}
+            onOpenChange={setUseModalOpen}
+            itemId={selectedItem.id}
+            itemName={selectedItem.name}
+            currentQuantity={selectedItem.quantity}
+          />
+          <RestockModal
+            open={restockModalOpen}
+            onOpenChange={setRestockModalOpen}
+            itemId={selectedItem.id}
+            itemName={selectedItem.name}
+          />
+        </>
+      )}
     </div>
   );
 }

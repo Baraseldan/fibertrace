@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { jobsApi, meterApi } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   Bluetooth, 
   Wifi, 
@@ -18,6 +29,13 @@ export default function Meter() {
   const [isConnected, setIsConnected] = useState(false);
   const [readings, setReadings] = useState<{time: string, dbm: number}[]>([]);
   const [currentReading, setCurrentReading] = useState<number | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
+  const { toast } = useToast();
+
+  const { data: jobs = [] } = useQuery({
+    queryKey: ['jobs'],
+    queryFn: jobsApi.getAll,
+  });
 
   const handleScan = () => {
     setIsScanning(true);
@@ -52,6 +70,45 @@ export default function Meter() {
 
     return () => clearInterval(interval);
   }, [isConnected]);
+
+  const saveReadingMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedJobId || !currentReading) {
+        throw new Error("Please select a job and ensure meter is connected");
+      }
+      
+      const avgReading = readings.length > 0
+        ? readings.reduce((sum, r) => sum + r.dbm, 0) / readings.length
+        : currentReading;
+      
+      return meterApi.create({
+        jobId: selectedJobId,
+        readingType: "Power Loss",
+        lossDbm: parseFloat(avgReading.toFixed(2)),
+        distanceMeters: null,
+        deviceName: "EXFO-MAX-700",
+        eventMarkers: null,
+      });
+    },
+    onSuccess: () => {
+      if (selectedJobId) {
+        queryClient.invalidateQueries({ queryKey: ['meter-readings', selectedJobId] });
+      }
+      toast({
+        title: "Success",
+        description: "Meter reading saved successfully",
+      });
+      setReadings([]);
+      setCurrentReading(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save reading",
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -159,11 +216,41 @@ export default function Meter() {
         </Card>
       </div>
 
+      {/* Job Selection */}
+      {isConnected && (
+        <Card className="bg-card/40 border-border/50">
+          <CardHeader>
+            <CardTitle>Associate with Job</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select onValueChange={(value) => setSelectedJobId(parseInt(value))}>
+              <SelectTrigger data-testid="select-job">
+                <SelectValue placeholder="Select a job to save readings" />
+              </SelectTrigger>
+              <SelectContent>
+                {jobs
+                  .filter(job => job.status !== 'Completed')
+                  .map((job) => (
+                    <SelectItem key={job.id} value={job.id.toString()}>
+                      #{job.id} - {job.clientName} ({job.type})
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Action Buttons */}
       <div className="flex gap-4">
-        <Button className="flex-1 bg-primary text-black hover:bg-primary/90" disabled={!isConnected}>
+        <Button 
+          className="flex-1 bg-primary text-black hover:bg-primary/90" 
+          disabled={!isConnected || !selectedJobId}
+          onClick={() => saveReadingMutation.mutate()}
+          data-testid="button-save-reading"
+        >
           <Save className="mr-2 h-4 w-4" />
-          Save to Job Log
+          {saveReadingMutation.isPending ? "Saving..." : "Save to Job Log"}
         </Button>
         <Button variant="outline" className="flex-1" disabled={!isConnected}>
           <Share2 className="mr-2 h-4 w-4" />

@@ -10,6 +10,7 @@ import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Jobs from "@/pages/Jobs";
+import CreateJob from "@/pages/CreateJob";
 import Map from "@/pages/Map";
 import Meter from "@/pages/Meter";
 import Inventory from "@/pages/Inventory";
@@ -29,7 +30,7 @@ function Router() {
             <Switch>
               <Route path="/dashboard" component={Dashboard} />
               <Route path="/jobs" component={Jobs} />
-              <Route path="/jobs/new" component={() => <div className="text-white">Create Job Placeholder</div>} />
+              <Route path="/jobs/new" component={CreateJob} />
               <Route path="/map" component={Map} />
               <Route path="/meter" component={Meter} />
               <Route path="/inventory" component={Inventory} />

@@ -3,7 +3,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Layers, Navigation } from "lucide-react";
-import { mockData } from "@/lib/mockData";
+import { useQuery } from "@tanstack/react-query";
+import { jobsApi } from "@/lib/api";
 
 // Fix for default marker icon in Leaflet with React
 import L from 'leaflet';
@@ -20,16 +21,23 @@ let DefaultIcon = L.icon({
 L.Marker.prototype.options.icon = DefaultIcon;
 
 export default function Map() {
-  const { jobs } = mockData;
-  const center: [number, number] = [40.7128, -74.0060];
+  const { data: jobs = [], isLoading } = useQuery({
+    queryKey: ['jobs'],
+    queryFn: jobsApi.getAll,
+  });
 
-  // Mock fiber route
-  const fiberRoute: [number, number][] = [
-    [40.7128, -74.0060],
-    [40.7138, -74.0070],
-    [40.7150, -74.0100],
-    [40.7160, -74.0110]
-  ];
+  const center: [number, number] = jobs.length > 0 && jobs[0].latitude && jobs[0].longitude
+    ? [parseFloat(jobs[0].latitude), parseFloat(jobs[0].longitude)]
+    : [40.7128, -74.0060];
+
+  // Generate fiber route from job locations
+  const fiberRoute: [number, number][] = jobs
+    .filter(job => job.latitude && job.longitude)
+    .map(job => [parseFloat(job.latitude!), parseFloat(job.longitude!)]);
+
+  if (isLoading) {
+    return <div className="text-white">Loading map...</div>;
+  }
 
   return (
     <div className="h-[calc(100vh-8rem)] w-full relative rounded-xl overflow-hidden border border-primary/20 shadow-2xl neon-box">
@@ -55,20 +63,25 @@ export default function Map() {
         />
 
         {/* Job Markers */}
-        {jobs.map((job) => (
-          <Marker key={job.id} position={job.coordinates}>
-            <Popup className="custom-popup">
-              <div className="p-2 min-w-[200px]">
-                <h3 className="font-bold text-slate-900">{job.clientName}</h3>
-                <p className="text-xs text-slate-600 mb-2">{job.address}</p>
-                <Badge className="mb-2">{job.type}</Badge>
-                <Button size="sm" className="w-full mt-2 h-7 text-xs">
-                  Start Job
-                </Button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {jobs
+          .filter(job => job.latitude && job.longitude)
+          .map((job) => (
+            <Marker key={job.id} position={[parseFloat(job.latitude!), parseFloat(job.longitude!)]}>
+              <Popup className="custom-popup">
+                <div className="p-2 min-w-[200px]">
+                  <h3 className="font-bold text-slate-900">{job.clientName}</h3>
+                  <p className="text-xs text-slate-600 mb-2">{job.address}</p>
+                  <div className="flex gap-2 mb-2">
+                    <Badge className="text-xs">{job.type}</Badge>
+                    <Badge variant="outline" className="text-xs">{job.status}</Badge>
+                  </div>
+                  <Button size="sm" className="w-full mt-2 h-7 text-xs">
+                    View Details
+                  </Button>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
 
         {/* User Location */}
         <Marker position={center} icon={L.divIcon({

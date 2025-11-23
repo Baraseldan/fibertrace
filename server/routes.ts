@@ -6,6 +6,7 @@ import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { insertUserSchema, insertClientSchema, insertJobSchema, insertInventoryItemSchema, insertMeterReadingSchema, insertInventoryUsageSchema } from "@shared/schema";
+import "./types";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication Routes
@@ -267,7 +268,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         usedBy: req.session!.userId,
       });
       await storage.useInventoryItem(data);
-      res.json({ message: "Inventory updated" });
+      const updatedItem = await storage.getInventoryItem(data.itemId);
+      res.json(updatedItem);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/inventory/:id/restock", requireAuth, async (req, res) => {
+    try {
+      const { quantity } = req.body;
+      const itemId = parseInt(req.params.id);
+      
+      if (!quantity || quantity < 1) {
+        return res.status(400).json({ message: "Invalid quantity" });
+      }
+      
+      const item = await storage.getInventoryItem(itemId);
+      if (!item) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+      
+      const updatedItem = await storage.updateInventoryItem(itemId, {
+        quantity: item.quantity + quantity,
+        lastRestocked: new Date(),
+      });
+      
+      res.json(updatedItem);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }

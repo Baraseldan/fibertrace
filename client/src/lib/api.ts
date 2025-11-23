@@ -111,13 +111,24 @@ export const inventoryApi = {
     return res.json();
   },
 
-  async use(itemId: number, jobId: number | null, quantity: number): Promise<void> {
+  async use(itemId: number, jobId: number | null, quantity: number): Promise<InventoryItem> {
     const res = await fetch(`${API_BASE}/inventory/use`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ itemId, jobId, quantityUsed: quantity }),
     });
     if (!res.ok) throw new Error("Failed to use inventory item");
+    return res.json();
+  },
+
+  async restock(itemId: number, quantity: number): Promise<InventoryItem> {
+    const res = await fetch(`${API_BASE}/inventory/${itemId}/restock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quantity }),
+    });
+    if (!res.ok) throw new Error("Failed to restock item");
+    return res.json();
   },
 };
 

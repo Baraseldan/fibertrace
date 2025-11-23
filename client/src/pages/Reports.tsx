@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+import { jobsApi } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
@@ -13,24 +15,37 @@ import {
   Cell
 } from "recharts";
 import { Download, Mail } from "lucide-react";
+import { format, subDays } from "date-fns";
 
 export default function Reports() {
-  const jobData = [
-    { name: 'Mon', jobs: 4 },
-    { name: 'Tue', jobs: 6 },
-    { name: 'Wed', jobs: 3 },
-    { name: 'Thu', jobs: 8 },
-    { name: 'Fri', jobs: 5 },
-    { name: 'Sat', jobs: 2 },
-    { name: 'Sun', jobs: 1 },
-  ];
+  const { data: jobs = [] } = useQuery({
+    queryKey: ['jobs'],
+    queryFn: jobsApi.getAll,
+  });
 
-  const typeData = [
-    { name: 'Install', value: 45 },
-    { name: 'Repair', value: 30 },
-    { name: 'Survey', value: 15 },
-    { name: 'Splice', value: 10 },
-  ];
+  // Calculate job data for last 7 days
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const date = subDays(new Date(), 6 - i);
+    const dayJobs = jobs.filter(job => {
+      const jobDate = new Date(job.scheduledDate);
+      return jobDate.toDateString() === date.toDateString();
+    });
+    return {
+      name: format(date, 'EEE'),
+      jobs: dayJobs.length,
+    };
+  });
+
+  // Calculate type distribution
+  const typeCounts = jobs.reduce((acc: any, job) => {
+    acc[job.type] = (acc[job.type] || 0) + 1;
+    return acc;
+  }, {});
+
+  const typeData = Object.entries(typeCounts).map(([name, value]) => ({
+    name,
+    value: value as number,
+  }));
 
   const COLORS = ['hsl(190 100% 50%)', 'hsl(280 100% 60%)', 'hsl(320 100% 50%)', 'hsl(40 100% 50%)'];
 
@@ -59,7 +74,7 @@ export default function Reports() {
           </CardHeader>
           <CardContent className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={jobData}>
+              <BarChart data={last7Days}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
                 <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={12} tick={{fill: 'rgba(255,255,255,0.5)'}} />
                 <YAxis stroke="rgba(255,255,255,0.3)" fontSize={12} tick={{fill: 'rgba(255,255,255,0.5)'}} />
