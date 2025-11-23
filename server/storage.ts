@@ -323,7 +323,7 @@ export class MemoryStorage implements IStorage {
       {
         id: 1,
         email: "alex.tech@fibertrace.com",
-        password: "$2b$10$xQZ4YqZ4YqZ4YqZ4YqZ4YuZ4YqZ4YqZ4YqZ4YqZ4YqZ4YqZ4YqZ4Y", // password: "password"
+        password: "$2b$10$WJsi2tKOEdxDSvRHyFKti.W.Ipq2mSjX9SZzmwSXvcXN7Cdi/Io2m", // password: "password"
         name: "Alex Rodriguez",
         role: "Senior Technician",
         phone: "+1 (555) 123-4567",
@@ -332,7 +332,7 @@ export class MemoryStorage implements IStorage {
       {
         id: 2,
         email: "sarah.chen@fibertrace.com",
-        password: "$2b$10$xQZ4YqZ4YqZ4YqZ4YqZ4YuZ4YqZ4YqZ4YqZ4YqZ4YqZ4YqZ4YqZ4Y", // password: "password"
+        password: "$2b$10$WJsi2tKOEdxDSvRHyFKti.W.Ipq2mSjX9SZzmwSXvcXN7Cdi/Io2m", // password: "password"
         name: "Sarah Chen",
         role: "Technician",
         phone: "+1 (555) 234-5678",
@@ -341,7 +341,7 @@ export class MemoryStorage implements IStorage {
       {
         id: 3,
         email: "mike.johnson@fibertrace.com",
-        password: "$2b$10$xQZ4YqZ4YqZ4YqZ4YqZ4YuZ4YqZ4YqZ4YqZ4YqZ4YqZ4YqZ4YqZ4Y", // password: "password"
+        password: "$2b$10$WJsi2tKOEdxDSvRHyFKti.W.Ipq2mSjX9SZzmwSXvcXN7Cdi/Io2m", // password: "password"
         name: "Mike Johnson",
         role: "Lead Technician",
         phone: "+1 (555) 345-6789",
