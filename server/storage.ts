@@ -691,6 +691,12 @@ export class MemoryStorage implements IStorage {
   }
 
   async createUser(user: InsertUser): Promise<User> {
+    // Check for duplicate email
+    const existingUser = await this.getUserByEmail(user.email);
+    if (existingUser) {
+      throw new Error("User with this email already exists");
+    }
+
     const newUser: User = {
       id: this.nextUserId++,
       email: user.email,

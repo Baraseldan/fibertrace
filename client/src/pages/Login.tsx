@@ -60,16 +60,12 @@ export default function Login() {
     setLoading(true);
     
     try {
-      await apiRequest("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          name,
-          phone: phone || undefined,
-          role: "Technician",
-        }),
+      await apiRequest("POST", "/api/auth/register", {
+        email,
+        password,
+        name,
+        phone: phone || undefined,
+        role: "Technician",
       });
 
       toast({
