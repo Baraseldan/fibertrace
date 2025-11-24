@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
+import type { Olt, Splitter, Fat, Atb, Closure } from "@shared/schema";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -51,6 +52,26 @@ export default function Dashboard() {
     queryKey: ['stats'],
     queryFn: statsApi.getStats,
     initialData: { total: 0, pending: 0, inProgress: 0, completed: 0 }
+  });
+
+  const { data: olts = [] } = useQuery<Olt[]>({
+    queryKey: ['/api/olts'],
+  });
+
+  const { data: splitters = [] } = useQuery<Splitter[]>({
+    queryKey: ['/api/splitters'],
+  });
+
+  const { data: fats = [] } = useQuery<Fat[]>({
+    queryKey: ['/api/fats'],
+  });
+
+  const { data: atbs = [] } = useQuery<Atb[]>({
+    queryKey: ['/api/atbs'],
+  });
+
+  const { data: closures = [] } = useQuery<Closure[]>({
+    queryKey: ['/api/closures'],
   });
 
   const modules = [
@@ -231,6 +252,75 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground">Successfully finished</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Network Infrastructure Stats */}
+      <div>
+        <h2 className="text-2xl font-bold font-display mb-4">Network Infrastructure</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <Network className="h-5 w-5 text-green-500" />
+                <Badge variant="outline" className="text-xs" data-testid="badge-olt-count">{olts.length}</Badge>
+              </div>
+              <p className="text-sm font-medium text-white">OLTs</p>
+              <p className="text-xs text-muted-foreground">Optical Line Terminals</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <Database className="h-5 w-5 text-blue-500" />
+                <Badge variant="outline" className="text-xs" data-testid="badge-splitter-count">{splitters.length}</Badge>
+              </div>
+              <p className="text-sm font-medium text-white">Splitters</p>
+              <p className="text-xs text-muted-foreground">
+                {splitters.filter(s => s.status === 'Active').length} Active
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <MapPin className="h-5 w-5 text-amber-500" />
+                <Badge variant="outline" className="text-xs" data-testid="badge-fat-count">{fats.length}</Badge>
+              </div>
+              <p className="text-sm font-medium text-white">FATs</p>
+              <p className="text-xs text-muted-foreground">
+                {fats.reduce((acc, f) => acc + (f.usedPorts || 0), 0)}/{fats.reduce((acc, f) => acc + f.totalPorts, 0)} Ports Used
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <Box className="h-5 w-5 text-purple-500" />
+                <Badge variant="outline" className="text-xs" data-testid="badge-atb-count">{atbs.length}</Badge>
+              </div>
+              <p className="text-sm font-medium text-white">ATBs</p>
+              <p className="text-xs text-muted-foreground">
+                {atbs.reduce((acc, a) => acc + (a.usedPorts || 0), 0)}/{atbs.reduce((acc, a) => acc + a.totalPorts, 0)} Ports Used
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-pink-500/10 to-pink-500/5 border-pink-500/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <Box className="h-5 w-5 text-pink-500" />
+                <Badge variant="outline" className="text-xs" data-testid="badge-closure-count">{closures.length}</Badge>
+              </div>
+              <p className="text-sm font-medium text-white">Closures</p>
+              <p className="text-xs text-muted-foreground">
+                {closures.reduce((acc, c) => acc + (c.spliceCount || 0), 0)} Total Splices
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Main Action Tiles */}

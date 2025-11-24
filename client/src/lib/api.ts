@@ -164,3 +164,22 @@ export const meterApi = {
     return res.json();
   },
 };
+
+// GPS Routes API
+export const gpsRoutesApi = {
+  async getAll() {
+    const res = await fetch(`${API_BASE}/fiber-routes`);
+    if (!res.ok) throw new Error("Failed to fetch GPS routes");
+    return res.json();
+  },
+
+  async create(route: any) {
+    const res = await fetch(`${API_BASE}/fiber-routes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(route),
+    });
+    if (!res.ok) throw new Error("Failed to create GPS route");
+    return res.json();
+  },
+};

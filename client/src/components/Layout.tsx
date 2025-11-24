@@ -16,6 +16,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { GlobalSearchTrigger } from "@/components/GlobalSearch";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
@@ -124,6 +125,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <NavContent />
           </SheetContent>
         </Sheet>
+      </div>
+      
+      {/* Desktop Search Bar */}
+      <div className="hidden md:block fixed top-4 left-80 right-4 z-40">
+        <div className="max-w-md">
+          <GlobalSearchTrigger />
+        </div>
       </div>
 
       {/* Main Content */}

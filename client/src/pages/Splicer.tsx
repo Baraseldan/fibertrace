@@ -5,7 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import type { SpliceRecord } from "@shared/schema";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { SpliceRecord, Closure } from "@shared/schema";
 import {
   Bluetooth,
   BluetoothConnected,
@@ -13,6 +20,8 @@ import {
   Activity,
   Save,
   RefreshCw,
+  Link as LinkIcon,
+  AlertCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -29,20 +38,68 @@ export default function Splicer() {
   const [attenuation, setAttenuation] = useState("");
   const [fusionCount, setFusionCount] = useState("");
   const [spliceQuality, setSpliceQuality] = useState<"Excellent" | "Good" | "Fair" | "Poor">("Good");
+  const [selectedClosureId, setSelectedClosureId] = useState<string>("");
 
   const { data: spliceRecords = [] } = useQuery<SpliceRecord[]>({
     queryKey: ['/api/splice-records'],
   });
 
+  const { data: closures = [] } = useQuery<Closure[]>({
+    queryKey: ['/api/closures'],
+  });
+
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest('/api/splice-records', 'POST', data);
+      // First, save the splice record
+      const spliceRecord = await apiRequest('/api/splice-records', 'POST', data);
+      
+      // If a closure is selected, update it
+      if (selectedClosureId && spliceRecord) {
+        const closure = closures.find(c => c.id === parseInt(selectedClosureId));
+        if (closure) {
+          // Update closure splice count
+          await apiRequest(`/api/closures/${selectedClosureId}`, 'PATCH', {
+            spliceCount: (closure.spliceCount || 0) + 1,
+          });
+
+          // Calculate output power based on splice loss and input power
+          if (closure.inputPower && data.spliceLoss) {
+            const inputPower = parseFloat(closure.inputPower);
+            const loss = parseFloat(data.spliceLoss);
+            const outputPower = inputPower - loss;
+
+            // Update closure output power
+            await apiRequest(`/api/closures/${selectedClosureId}`, 'PATCH', {
+              outputPower: outputPower.toFixed(2),
+            });
+
+            // Create power reading
+            await apiRequest('/api/power-readings', 'POST', {
+              nodeId: parseInt(selectedClosureId),
+              nodeType: 'Closure',
+              inputPower: inputPower.toFixed(2),
+              outputPower: outputPower.toFixed(2),
+              spliceLoss: loss.toFixed(2),
+              connectorLoss: 0.5,
+              distanceAttenuation: 0,
+              totalLoss: loss.toFixed(2),
+              status: outputPower >= -15 ? 'Normal' : outputPower >= -25 ? 'Warning' : 'Critical',
+            });
+          }
+        }
+      }
+
+      return spliceRecord;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/splice-records'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/closures'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/power-readings'] });
       toast({
         title: "Splice Record Saved",
-        description: "Splice data has been recorded successfully.",
+        description: selectedClosureId 
+          ? "Splice data saved and closure updated successfully."
+          : "Splice data has been recorded successfully.",
       });
       resetForm();
     },
@@ -56,10 +113,26 @@ export default function Splicer() {
   });
 
   const handleConnect = () => {
-    // Simulated Bluetooth connection
+    // Simulated Bluetooth connection with auto-fill
+    const simulatedData = {
+      fiber1: "F1-A-12",
+      fiber2: "F1-B-12",
+      spliceLoss: "0.08",
+      attenuation: "0.15",
+      fusionCount: "1",
+      quality: "Good" as const,
+    };
+
+    setFiber1(simulatedData.fiber1);
+    setFiber2(simulatedData.fiber2);
+    setSpliceLoss(simulatedData.spliceLoss);
+    setAttenuation(simulatedData.attenuation);
+    setFusionCount(simulatedData.fusionCount);
+    setSpliceQuality(simulatedData.quality);
+
     toast({
-      title: "Bluetooth",
-      description: "Bluetooth connection is simulated in this demo",
+      title: "Bluetooth Connected",
+      description: "Simulated splicer data loaded. In production, this would sync from a real device.",
     });
     setIsConnected(true);
     setDeviceName("Fujikura FSM-100P");
@@ -85,6 +158,7 @@ export default function Splicer() {
     const count = fusionCount ? parseInt(fusionCount) : undefined;
 
     saveMutation.mutate({
+      closureId: selectedClosureId ? parseInt(selectedClosureId) : undefined,
       fiber1,
       fiber2,
       spliceLoss: loss,
@@ -102,6 +176,7 @@ export default function Splicer() {
     setAttenuation("");
     setFusionCount("");
     setSpliceQuality("Good");
+    setSelectedClosureId("");
   };
 
   return (
@@ -113,7 +188,7 @@ export default function Splicer() {
             Bluetooth Splicer
           </h1>
           <p className="text-muted-foreground mt-1">
-            Real-time Splice Data Sync
+            Real-time Splice Data Sync & Closure Updates
           </p>
         </div>
       </div>
@@ -158,6 +233,44 @@ export default function Splicer() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Closure Linking */}
+      {closures.length > 0 && (
+        <Card className="bg-card/30 border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <LinkIcon className="h-5 w-5 text-primary" />
+              Link to Closure (Optional)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="closure-select">Select Closure to Update</Label>
+              <Select value={selectedClosureId} onValueChange={setSelectedClosureId}>
+                <SelectTrigger id="closure-select" data-testid="select-closure">
+                  <SelectValue placeholder="None - Manual splice only" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None - Manual splice only</SelectItem>
+                  {closures.map((closure) => (
+                    <SelectItem key={closure.id} value={closure.id.toString()}>
+                      {closure.name} - {closure.type} ({closure.spliceCount || 0} splices)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedClosureId && (
+                <div className="mt-2 p-3 bg-primary/10 border border-primary/20 rounded-md">
+                  <p className="text-xs flex items-center gap-1 text-primary">
+                    <AlertCircle className="h-3 w-3" />
+                    This splice will update the selected closure's splice count and power readings
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Splice Data Entry */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -334,6 +447,7 @@ export default function Splicer() {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(record.spliceDate).toLocaleString()}
+                      {record.deviceName && ` • ${record.deviceName}`}
                     </p>
                   </div>
                   <div className="flex items-center gap-4 text-sm">

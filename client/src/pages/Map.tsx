@@ -1,15 +1,17 @@
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { useState, useEffect, useRef } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Layers, Navigation } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { jobsApi } from "@/lib/api";
-
-// Fix for default marker icon in Leaflet with React
+import { Plus, Layers, Navigation, Play, Pause, Save, AlertCircle, Activity, Zap } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { jobsApi, gpsRoutesApi } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { getPowerStatus } from "@/lib/powerUtils";
 import L from 'leaflet';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+import type { Olt, Splitter, Fat, Atb, Closure } from "@shared/schema";
 
 let DefaultIcon = L.icon({
     iconUrl: icon,
@@ -20,27 +22,350 @@ let DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
+type GPSPermissionState = 'prompt' | 'granted' | 'denied' | 'unavailable';
+
+// Component to handle map centering
+function MapController({ center }: { center: [number, number] }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (center) {
+      map.setView(center, map.getZoom());
+    }
+  }, [center, map]);
+  
+  return null;
+}
+
+// Create custom icons for different node types
+const createNodeIcon = (type: string, powerColor?: string) => {
+  const colorMap: Record<string, string> = {
+    'OLT': '#10b981',
+    'Splitter': '#3b82f6',
+    'FAT': '#f59e0b',
+    'ATB': '#8b5cf6',
+    'Dome': '#ec4899',
+    'Underground': '#6366f1',
+    'Aerial': '#14b8a6'
+  };
+  
+  const color = powerColor || colorMap[type];
+  const letter = type === 'Dome' || type === 'Underground' || type === 'Aerial' ? 'C' : type.charAt(0);
+  
+  return L.divIcon({
+    className: 'custom-node-icon',
+    html: `
+      <div style="
+        width: 24px;
+        height: 24px;
+        background: ${color};
+        border: 3px solid white;
+        border-radius: 50%;
+        box-shadow: 0 0 10px ${color};
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: bold;
+        color: white;
+      ">
+        ${letter}
+      </div>
+    `,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
+};
+
 export default function Map() {
-  const { data: jobs = [], isLoading } = useQuery({
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [currentLocation, setCurrentLocation] = useState<[number, number] | null>(null);
+  const [gpsPath, setGpsPath] = useState<[number, number][]>([]);
+  const [isTracking, setIsTracking] = useState(false);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [permissionState, setPermissionState] = useState<GPSPermissionState>('prompt');
+  const watchIdRef = useRef<number | null>(null);
+
+  const { data: jobs = [], isLoading: jobsLoading, error: jobsError } = useQuery({
     queryKey: ['jobs'],
     queryFn: jobsApi.getAll,
   });
 
-  const center: [number, number] = jobs.length > 0 && jobs[0].latitude && jobs[0].longitude
-    ? [parseFloat(jobs[0].latitude), parseFloat(jobs[0].longitude)]
-    : [40.7128, -74.0060];
+  const { data: olts = [], isLoading: oltsLoading, error: oltsError } = useQuery<Olt[]>({
+    queryKey: ['/api/olts'],
+  });
 
-  // Generate fiber route from job locations
-  const fiberRoute: [number, number][] = jobs
-    .filter(job => job.latitude && job.longitude)
-    .map(job => [parseFloat(job.latitude!), parseFloat(job.longitude!)]);
+  const { data: splitters = [], isLoading: splittersLoading, error: splittersError } = useQuery<Splitter[]>({
+    queryKey: ['/api/splitters'],
+  });
+
+  const { data: fats = [], isLoading: fatsLoading, error: fatsError } = useQuery<Fat[]>({
+    queryKey: ['/api/fats'],
+  });
+
+  const { data: atbs = [], isLoading: atbsLoading, error: atbsError } = useQuery<Atb[]>({
+    queryKey: ['/api/atbs'],
+  });
+
+  const { data: closures = [], isLoading: closuresLoading, error: closuresError } = useQuery<Closure[]>({
+    queryKey: ['/api/closures'],
+  });
+
+  const saveGPSRouteMutation = useMutation({
+    mutationFn: async (waypoints: [number, number][]) => {
+      const linearDistance = calculateTotalDistance(waypoints);
+      return gpsRoutesApi.create({
+        name: `GPS Track ${new Date().toISOString()}`,
+        waypoints: JSON.stringify(waypoints),
+        linearDistance: linearDistance.toFixed(2),
+        routedDistance: linearDistance.toFixed(2),
+        cableRequired: (linearDistance * 1.1).toFixed(2), // 10% slack
+        slackPercentage: 10,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/fiber-routes'] });
+      toast({
+        title: "GPS Route Saved",
+        description: "Your tracked path has been saved successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save GPS route",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Calculate the best initial center point
+  const getInitialCenter = (): [number, number] => {
+    // Priority 1: Current GPS location
+    if (currentLocation) return currentLocation;
+    
+    // Priority 2: First job with coordinates
+    const jobWithCoords = jobs.find(j => j.latitude && j.longitude);
+    if (jobWithCoords) {
+      return [parseFloat(jobWithCoords.latitude!), parseFloat(jobWithCoords.longitude!)];
+    }
+    
+    // Priority 3: First OLT with coordinates
+    const oltWithCoords = olts.find(o => o.latitude && o.longitude);
+    if (oltWithCoords) {
+      return [parseFloat(oltWithCoords.latitude!), parseFloat(oltWithCoords.longitude!)];
+    }
+    
+    // Priority 4: Any node with coordinates
+    const nodeWithCoords = [...splitters, ...fats, ...atbs, ...closures].find(n => n.latitude && n.longitude);
+    if (nodeWithCoords) {
+      return [parseFloat(nodeWithCoords.latitude!), parseFloat(nodeWithCoords.longitude!)];
+    }
+    
+    // Fallback: Default location (New York)
+    return [40.7128, -74.0060];
+  };
+
+  const center = getInitialCenter();
+
+  // Check GPS permission
+  const checkGPSPermission = async () => {
+    if (!navigator.geolocation) {
+      setPermissionState('unavailable');
+      return false;
+    }
+
+    try {
+      if (navigator.permissions) {
+        const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+        setPermissionState(result.state as GPSPermissionState);
+        return result.state === 'granted';
+      }
+      return true; // Assume available if permissions API not supported
+    } catch (error) {
+      console.error("Error checking GPS permission:", error);
+      return true;
+    }
+  };
+
+  // Start GPS tracking
+  const startTracking = async () => {
+    const hasPermission = await checkGPSPermission();
+    
+    if (!navigator.geolocation) {
+      toast({
+        title: "GPS Unavailable",
+        description: "Geolocation is not supported by your browser",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsTracking(true);
+    
+    // Get initial position
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const newLocation: [number, number] = [
+          position.coords.latitude,
+          position.coords.longitude
+        ];
+        setCurrentLocation(newLocation);
+        setGpsPath([newLocation]);
+        setAccuracy(position.coords.accuracy);
+        setPermissionState('granted');
+      },
+      (error) => {
+        console.error("Error getting location:", error);
+        setIsTracking(false);
+        
+        if (error.code === error.PERMISSION_DENIED) {
+          setPermissionState('denied');
+          toast({
+            title: "Permission Denied",
+            description: "Please allow location access in your browser settings to use GPS tracking.",
+            variant: "destructive",
+          });
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          toast({
+            title: "Location Unavailable",
+            description: "Unable to determine your location. Please check your GPS settings.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "GPS Error",
+            description: "Failed to get your location. Please try again.",
+            variant: "destructive",
+          });
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+
+    // Watch position for continuous tracking
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const newLocation: [number, number] = [
+          position.coords.latitude,
+          position.coords.longitude
+        ];
+        setCurrentLocation(newLocation);
+        setGpsPath(prev => [...prev, newLocation]);
+        setAccuracy(position.coords.accuracy);
+      },
+      (error) => {
+        console.error("Error watching location:", error);
+        // Don't stop tracking on intermittent errors, just log them
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 5000
+      }
+    );
+  };
+
+  // Stop GPS tracking
+  const stopTracking = () => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setIsTracking(false);
+  };
+
+  // Save GPS route
+  const saveGPSRoute = () => {
+    if (gpsPath.length < 2) {
+      toast({
+        title: "Insufficient Data",
+        description: "Track a longer path before saving (minimum 2 points).",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    saveGPSRouteMutation.mutate(gpsPath);
+  };
+
+  // Calculate distance between two GPS points (Haversine formula)
+  const calculateDistance = (point1: [number, number], point2: [number, number]): number => {
+    const R = 6371000; // Earth's radius in meters
+    const lat1 = point1[0] * Math.PI / 180;
+    const lat2 = point2[0] * Math.PI / 180;
+    const deltaLat = (point2[0] - point1[0]) * Math.PI / 180;
+    const deltaLon = (point2[1] - point1[1]) * Math.PI / 180;
+
+    const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+              Math.cos(lat1) * Math.cos(lat2) *
+              Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  };
+
+  // Calculate total distance of path
+  const calculateTotalDistance = (path: [number, number][]): number => {
+    let total = 0;
+    for (let i = 1; i < path.length; i++) {
+      total += calculateDistance(path[i - 1], path[i]);
+    }
+    return total;
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
+
+  // Check for any loading states
+  const isLoading = jobsLoading || oltsLoading || splittersLoading || fatsLoading || atbsLoading || closuresLoading;
+  const hasErrors = jobsError || oltsError || splittersError || fatsError || atbsError || closuresError;
 
   if (isLoading) {
-    return <div className="text-white">Loading map...</div>;
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-8rem)]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading map data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasErrors) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-8rem)]">
+        <Card className="p-6 max-w-md">
+          <div className="text-center">
+            <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Error Loading Map Data</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {jobsError?.message || oltsError?.message || splittersError?.message || 
+               fatsError?.message || atbsError?.message || closuresError?.message || 
+               "Failed to load map data"}
+            </p>
+            <Button onClick={() => queryClient.invalidateQueries()} data-testid="button-retry">
+              Retry
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   return (
-    <div className="h-[calc(100vh-8rem)] w-full relative rounded-xl overflow-hidden border border-primary/20 shadow-2xl neon-box">
+    <div className="h-[calc(100vh-8rem)] w-full relative rounded-xl overflow-hidden border border-primary/20 shadow-2xl">
       <MapContainer 
         center={center} 
         zoom={14} 
@@ -48,64 +373,346 @@ export default function Map() {
         style={{ height: '100%', width: '100%', background: '#0f172a' }}
         className="z-0"
       >
+        <MapController center={center} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
         
-        {/* Fiber Route Line */}
-        <Polyline 
-          positions={fiberRoute} 
-          color="cyan" 
-          weight={4} 
-          opacity={0.7} 
-          dashArray="10, 10" 
-        />
+        {/* GPS Path */}
+        {gpsPath.length > 1 && (
+          <Polyline 
+            positions={gpsPath} 
+            color="#10b981" 
+            weight={3} 
+            opacity={0.8} 
+            data-testid="gps-path"
+          />
+        )}
 
-        {/* Job Markers */}
-        {jobs
-          .filter(job => job.latitude && job.longitude)
-          .map((job) => (
-            <Marker key={job.id} position={[parseFloat(job.latitude!), parseFloat(job.longitude!)]}>
-              <Popup className="custom-popup">
+        {/* Job Routes */}
+        {jobs.length > 0 && (
+          <Polyline 
+            positions={jobs
+              .filter(job => job.latitude && job.longitude)
+              .map(job => [parseFloat(job.latitude!), parseFloat(job.longitude!)])} 
+            color="cyan" 
+            weight={2} 
+            opacity={0.5} 
+            dashArray="5, 10" 
+          />
+        )}
+
+        {/* Current Location Marker */}
+        {currentLocation && (
+          <Marker 
+            position={currentLocation} 
+            icon={L.divIcon({
+              className: 'bg-transparent',
+              html: '<div class="h-5 w-5 bg-green-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,1)] border-3 border-white animate-pulse"></div>'
+            })}
+            data-testid="marker-current-location"
+          >
+            <Popup>
+              <div className="p-2">
+                <h3 className="font-bold text-sm">Your Location</h3>
+                <p className="text-xs">Lat: {currentLocation[0].toFixed(6)}</p>
+                <p className="text-xs">Lon: {currentLocation[1].toFixed(6)}</p>
+                {accuracy && <p className="text-xs">Accuracy: ±{accuracy.toFixed(0)}m</p>}
+              </div>
+            </Popup>
+          </Marker>
+        )}
+
+        {/* OLT Markers */}
+        {olts.map((olt) => {
+          if (!olt.latitude || !olt.longitude) return null;
+          return (
+            <Marker 
+              key={`olt-${olt.id}`}
+              position={[parseFloat(olt.latitude), parseFloat(olt.longitude)]}
+              icon={createNodeIcon('OLT')}
+              data-testid={`marker-olt-${olt.id}`}
+            >
+              <Popup>
                 <div className="p-2 min-w-[200px]">
-                  <h3 className="font-bold text-slate-900">{job.clientName}</h3>
-                  <p className="text-xs text-slate-600 mb-2">{job.address}</p>
-                  <div className="flex gap-2 mb-2">
-                    <Badge className="text-xs">{job.type}</Badge>
-                    <Badge variant="outline" className="text-xs">{job.status}</Badge>
+                  <h3 className="font-bold text-slate-900">{olt.name}</h3>
+                  <Badge className="text-xs mt-1">OLT</Badge>
+                  <div className="mt-2 text-xs space-y-1">
+                    <p><strong>Location:</strong> {olt.location}</p>
+                    <p><strong>Capacity:</strong> {olt.capacity} ports</p>
+                    <p><strong>Used:</strong> {olt.usedPorts}/{olt.capacity}</p>
+                    <p><strong>Status:</strong> <Badge variant={olt.status === 'Active' ? 'default' : 'secondary'}>{olt.status}</Badge></p>
+                    {olt.vendor && <p><strong>Vendor:</strong> {olt.vendor}</p>}
                   </div>
-                  <Button size="sm" className="w-full mt-2 h-7 text-xs">
-                    View Details
-                  </Button>
                 </div>
               </Popup>
             </Marker>
-          ))}
+          );
+        })}
 
-        {/* User Location */}
-        <Marker position={center} icon={L.divIcon({
-          className: 'bg-transparent',
-          html: '<div class="h-4 w-4 bg-primary rounded-full shadow-[0_0_15px_rgba(6,182,212,1)] border-2 border-white animate-pulse"></div>'
-        })} />
+        {/* Splitter Markers */}
+        {splitters.map((splitter) => {
+          if (!splitter.latitude || !splitter.longitude) return null;
+          const powerInfo = getPowerStatus(splitter.inputPower);
+          
+          return (
+            <Marker 
+              key={`splitter-${splitter.id}`}
+              position={[parseFloat(splitter.latitude), parseFloat(splitter.longitude)]}
+              icon={createNodeIcon('Splitter', powerInfo.color)}
+              data-testid={`marker-splitter-${splitter.id}`}
+            >
+              <Popup>
+                <div className="p-2 min-w-[200px]">
+                  <h3 className="font-bold text-slate-900">{splitter.name}</h3>
+                  <Badge className="text-xs mt-1">Splitter {splitter.splitRatio}</Badge>
+                  <div className="mt-2 text-xs space-y-1">
+                    <p><strong>Location:</strong> {splitter.location}</p>
+                    {splitter.inputPower && (
+                      <p className="flex items-center gap-1">
+                        <Zap className="h-3 w-3" style={{color: powerInfo.color}} />
+                        <strong>Power:</strong> {splitter.inputPower} dBm ({powerInfo.status})
+                      </p>
+                    )}
+                    <p><strong>Status:</strong> <Badge variant={splitter.status === 'Active' ? 'default' : 'secondary'}>{splitter.status}</Badge></p>
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
+
+        {/* FAT Markers */}
+        {fats.map((fat) => {
+          if (!fat.latitude || !fat.longitude) return null;
+          const powerInfo = getPowerStatus(fat.inputPower);
+          
+          return (
+            <Marker 
+              key={`fat-${fat.id}`}
+              position={[parseFloat(fat.latitude), parseFloat(fat.longitude)]}
+              icon={createNodeIcon('FAT', powerInfo.color)}
+              data-testid={`marker-fat-${fat.id}`}
+            >
+              <Popup>
+                <div className="p-2 min-w-[200px]">
+                  <h3 className="font-bold text-slate-900">{fat.name}</h3>
+                  <Badge className="text-xs mt-1">FAT</Badge>
+                  <div className="mt-2 text-xs space-y-1">
+                    <p><strong>Location:</strong> {fat.location}</p>
+                    <p><strong>Ports:</strong> {fat.usedPorts}/{fat.totalPorts}</p>
+                    {fat.inputPower && (
+                      <p className="flex items-center gap-1">
+                        <Zap className="h-3 w-3" style={{color: powerInfo.color}} />
+                        <strong>Power:</strong> {fat.inputPower} dBm ({powerInfo.status})
+                      </p>
+                    )}
+                    <p><strong>Status:</strong> <Badge variant={fat.status === 'Active' ? 'default' : 'secondary'}>{fat.status}</Badge></p>
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
+
+        {/* ATB Markers */}
+        {atbs.map((atb) => {
+          if (!atb.latitude || !atb.longitude) return null;
+          const powerInfo = getPowerStatus(atb.inputPower);
+          
+          return (
+            <Marker 
+              key={`atb-${atb.id}`}
+              position={[parseFloat(atb.latitude), parseFloat(atb.longitude)]}
+              icon={createNodeIcon('ATB', powerInfo.color)}
+              data-testid={`marker-atb-${atb.id}`}
+            >
+              <Popup>
+                <div className="p-2 min-w-[200px]">
+                  <h3 className="font-bold text-slate-900">{atb.name}</h3>
+                  <Badge className="text-xs mt-1">ATB</Badge>
+                  <div className="mt-2 text-xs space-y-1">
+                    <p><strong>Location:</strong> {atb.location}</p>
+                    <p><strong>Ports:</strong> {atb.usedPorts}/{atb.totalPorts}</p>
+                    {atb.inputPower && (
+                      <p className="flex items-center gap-1">
+                        <Zap className="h-3 w-3" style={{color: powerInfo.color}} />
+                        <strong>Power:</strong> {atb.inputPower} dBm ({powerInfo.status})
+                      </p>
+                    )}
+                    <p><strong>Status:</strong> <Badge variant={atb.status === 'Active' ? 'default' : 'secondary'}>{atb.status}</Badge></p>
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
+
+        {/* Closure Markers */}
+        {closures.map((closure) => {
+          if (!closure.latitude || !closure.longitude) return null;
+          const powerInfo = getPowerStatus(closure.inputPower);
+          
+          return (
+            <Marker 
+              key={`closure-${closure.id}`}
+              position={[parseFloat(closure.latitude), parseFloat(closure.longitude)]}
+              icon={createNodeIcon(closure.type, powerInfo.color)}
+              data-testid={`marker-closure-${closure.id}`}
+            >
+              <Popup>
+                <div className="p-2 min-w-[200px]">
+                  <h3 className="font-bold text-slate-900">{closure.name}</h3>
+                  <Badge className="text-xs mt-1">{closure.type} Closure</Badge>
+                  <div className="mt-2 text-xs space-y-1">
+                    <p><strong>Location:</strong> {closure.location}</p>
+                    <p><strong>Fibers:</strong> {closure.fiberCount}</p>
+                    <p><strong>Splices:</strong> {closure.spliceCount}</p>
+                    {closure.inputPower && (
+                      <p className="flex items-center gap-1">
+                        <Zap className="h-3 w-3" style={{color: powerInfo.color}} />
+                        <strong>Power:</strong> {closure.inputPower} dBm ({powerInfo.status})
+                      </p>
+                    )}
+                    <p><strong>Status:</strong> <Badge variant={closure.status === 'Active' ? 'default' : 'secondary'}>{closure.status}</Badge></p>
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
 
       {/* Map Overlays */}
       <div className="absolute top-4 left-4 z-[400] flex flex-col gap-2">
-         <Card className="bg-card/80 backdrop-blur-md border-border/50 w-64 p-3">
-           <h3 className="font-bold text-sm text-white mb-1">Technician Location</h3>
-           <p className="text-xs text-muted-foreground flex items-center gap-1">
-             <Navigation className="h-3 w-3 text-primary" />
-             40.7128° N, 74.0060° W
-           </p>
-         </Card>
+        <Card className="bg-card/90 backdrop-blur-md border-border/50 w-72 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold text-sm flex items-center gap-1">
+              <Navigation className="h-4 w-4 text-primary" />
+              GPS Tracking
+            </h3>
+            <div className="flex gap-1">
+              {isTracking && gpsPath.length > 1 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={saveGPSRoute}
+                  disabled={saveGPSRouteMutation.isPending}
+                  data-testid="button-save-route"
+                >
+                  <Save className="h-3 w-3 mr-1" />
+                  Save
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant={isTracking ? "destructive" : "default"}
+                onClick={isTracking ? stopTracking : startTracking}
+                disabled={permissionState === 'denied' || permissionState === 'unavailable'}
+                data-testid="button-gps-toggle"
+              >
+                {isTracking ? (
+                  <>
+                    <Pause className="h-3 w-3 mr-1" />
+                    Stop
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-3 w-3 mr-1" />
+                    Start
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+          {permissionState === 'denied' && (
+            <div className="mb-2 p-2 bg-destructive/10 border border-destructive/20 rounded-md">
+              <p className="text-xs text-destructive flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                Location permission denied
+              </p>
+            </div>
+          )}
+          {permissionState === 'unavailable' && (
+            <div className="mb-2 p-2 bg-destructive/10 border border-destructive/20 rounded-md">
+              <p className="text-xs text-destructive flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                GPS not available
+              </p>
+            </div>
+          )}
+          {currentLocation ? (
+            <div className="text-xs space-y-1">
+              <p className="text-muted-foreground">
+                <strong>Lat:</strong> {currentLocation[0].toFixed(6)}°
+              </p>
+              <p className="text-muted-foreground">
+                <strong>Lon:</strong> {currentLocation[1].toFixed(6)}°
+              </p>
+              {accuracy && (
+                <p className="text-muted-foreground">
+                  <strong>Accuracy:</strong> ±{accuracy.toFixed(0)}m
+                </p>
+              )}
+              <p className="text-muted-foreground">
+                <strong>Path Points:</strong> {gpsPath.length}
+              </p>
+              {gpsPath.length > 1 && (
+                <p className="text-muted-foreground">
+                  <strong>Distance:</strong> {(calculateTotalDistance(gpsPath)).toFixed(0)}m
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Click Start to track location</p>
+          )}
+        </Card>
+
+        <Card className="bg-card/90 backdrop-blur-md border-border/50 w-72 p-3">
+          <h3 className="font-bold text-sm mb-2 flex items-center gap-1">
+            <Activity className="h-4 w-4 text-primary" />
+            Network Nodes
+          </h3>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="flex items-center gap-1">
+              <div className="h-3 w-3 bg-green-500 rounded-full border border-white"></div>
+              <span data-testid="text-olt-count">OLT ({olts.length})</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="h-3 w-3 bg-blue-500 rounded-full border border-white"></div>
+              <span data-testid="text-splitter-count">Splitters ({splitters.length})</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="h-3 w-3 bg-amber-500 rounded-full border border-white"></div>
+              <span data-testid="text-fat-count">FAT ({fats.length})</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="h-3 w-3 bg-purple-500 rounded-full border border-white"></div>
+              <span data-testid="text-atb-count">ATB ({atbs.length})</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="h-3 w-3 bg-pink-500 rounded-full border border-white"></div>
+              <span data-testid="text-closure-count">Closures ({closures.length})</span>
+            </div>
+          </div>
+        </Card>
       </div>
 
       <div className="absolute bottom-8 right-4 z-[400] flex flex-col gap-2">
-        <Button size="icon" className="rounded-full bg-card/80 border-border/50 hover:bg-primary/20 hover:text-primary">
+        <Button 
+          size="icon" 
+          variant="secondary"
+          className="rounded-full"
+          data-testid="button-layers"
+        >
           <Layers className="h-5 w-5" />
         </Button>
-        <Button size="icon" className="rounded-full bg-primary text-black shadow-[0_0_15px_rgba(6,182,212,0.5)]">
+        <Button 
+          size="icon" 
+          className="rounded-full bg-primary text-black"
+          data-testid="button-add-node"
+        >
           <Plus className="h-6 w-6" />
         </Button>
       </div>
