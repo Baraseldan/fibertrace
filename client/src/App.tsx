@@ -15,6 +15,12 @@ import Map from "@/pages/Map";
 import Meter from "@/pages/Meter";
 import Inventory from "@/pages/Inventory";
 import Reports from "@/pages/Reports";
+import Topology from "@/pages/Topology";
+import PowerAnalysis from "@/pages/PowerAnalysis";
+import Infrastructure from "@/pages/Infrastructure";
+import Nodes from "@/pages/Nodes";
+import Splicer from "@/pages/Splicer";
+import Calculator from "@/pages/Calculator";
 
 import Layout from "@/components/Layout";
 
@@ -35,6 +41,12 @@ function Router() {
               <Route path="/meter" component={Meter} />
               <Route path="/inventory" component={Inventory} />
               <Route path="/reports" component={Reports} />
+              <Route path="/topology" component={Topology} />
+              <Route path="/power-analysis" component={PowerAnalysis} />
+              <Route path="/infrastructure" component={Infrastructure} />
+              <Route path="/nodes" component={Nodes} />
+              <Route path="/splicer" component={Splicer} />
+              <Route path="/calculator" component={Calculator} />
               <Route component={NotFound} />
             </Switch>
           </Layout>

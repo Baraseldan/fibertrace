@@ -3,20 +3,45 @@ import { jobsApi, statsApi } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import { 
-  Activity, 
-  Briefcase, 
+  Network, 
+  Zap, 
+  Box, 
+  Database, 
+  Bluetooth, 
+  MapPin, 
+  Ruler, 
+  Package, 
+  FileBarChart, 
   CheckCircle2, 
   Clock, 
-  AlertTriangle,
-  MapPin,
-  Plus
+  Activity,
+  Briefcase,
+  Wifi,
+  WifiOff,
+  Search
 } from "lucide-react";
 import { Link } from "wouter";
+import { useState, useEffect } from "react";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const { data: jobs = [], isLoading: jobsLoading } = useQuery({
     queryKey: ['jobs'],
     queryFn: jobsApi.getAll,
@@ -28,169 +53,280 @@ export default function Dashboard() {
     initialData: { total: 0, pending: 0, inProgress: 0, completed: 0 }
   });
 
+  const modules = [
+    {
+      title: 'Network Topology',
+      description: 'View & manage GPON structure',
+      icon: Network,
+      color: 'primary',
+      path: '/topology',
+      badge: 'Live'
+    },
+    {
+      title: 'Power Mapping',
+      description: 'Signal analysis & loss calculation',
+      icon: Zap,
+      color: 'amber',
+      path: '/power-analysis',
+      badge: 'Active'
+    },
+    {
+      title: 'Closures & Infrastructure',
+      description: 'FATS, ATBs, Domes & Closures',
+      icon: Box,
+      color: 'purple',
+      path: '/infrastructure',
+    },
+    {
+      title: 'Nodes & Splitters',
+      description: 'OLT, ODF, Splitter library',
+      icon: Database,
+      color: 'blue',
+      path: '/nodes',
+    },
+    {
+      title: 'Bluetooth Splicer',
+      description: 'Real-time splice data sync',
+      icon: Bluetooth,
+      color: 'cyan',
+      path: '/splicer',
+      badge: 'BT'
+    },
+    {
+      title: 'Offline Map',
+      description: 'GPS tracking & field planning',
+      icon: MapPin,
+      color: 'green',
+      path: '/map',
+    },
+    {
+      title: 'Distance Calculator',
+      description: 'Route planning & cable estimation',
+      icon: Ruler,
+      color: 'orange',
+      path: '/calculator',
+    },
+    {
+      title: 'Inventory Manager',
+      description: 'Tools & materials tracking',
+      icon: Package,
+      color: 'pink',
+      path: '/inventory',
+    },
+    {
+      title: 'Reports & Logs',
+      description: 'Field reports & job documentation',
+      icon: FileBarChart,
+      color: 'violet',
+      path: '/reports',
+    },
+  ];
+
+  const colorMap: Record<string, string> = {
+    primary: 'from-primary/20 to-primary/5 border-primary/30 hover:border-primary/50',
+    amber: 'from-amber-500/20 to-amber-500/5 border-amber-500/30 hover:border-amber-500/50',
+    purple: 'from-purple-500/20 to-purple-500/5 border-purple-500/30 hover:border-purple-500/50',
+    blue: 'from-blue-500/20 to-blue-500/5 border-blue-500/30 hover:border-blue-500/50',
+    cyan: 'from-cyan-500/20 to-cyan-500/5 border-cyan-500/30 hover:border-cyan-500/50',
+    green: 'from-green-500/20 to-green-500/5 border-green-500/30 hover:border-green-500/50',
+    orange: 'from-orange-500/20 to-orange-500/5 border-orange-500/30 hover:border-orange-500/50',
+    pink: 'from-pink-500/20 to-pink-500/5 border-pink-500/30 hover:border-pink-500/50',
+    violet: 'from-violet-500/20 to-violet-500/5 border-violet-500/30 hover:border-violet-500/50',
+  };
+
+  const iconColorMap: Record<string, string> = {
+    primary: 'text-primary',
+    amber: 'text-amber-500',
+    purple: 'text-purple-500',
+    blue: 'text-blue-500',
+    cyan: 'text-cyan-500',
+    green: 'text-green-500',
+    orange: 'text-orange-500',
+    pink: 'text-pink-500',
+    violet: 'text-violet-500',
+  };
+
   if (jobsLoading) {
-    return <div className="text-white">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-white text-lg">Loading dashboard...</div>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-8">
+      {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-white">
             Welcome back, <span className="text-primary">{user?.name.split(' ')[0]}</span>
           </h1>
-          <p className="text-muted-foreground">Here's your fiber network overview for today.</p>
+          <p className="text-muted-foreground mt-1">GPON/FTTH Field Management System</p>
         </div>
-        <div className="flex gap-3">
-          <Link href="/jobs/new">
-            <Button className="bg-primary text-black hover:bg-primary/90 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
-              <Plus className="mr-2 h-4 w-4" /> New Job
-            </Button>
-          </Link>
+        <div className="flex items-center gap-3">
+          {/* Sync Status */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-card border border-border">
+            {isOnline ? (
+              <>
+                <Wifi className="h-4 w-4 text-green-500" data-testid="icon-online" />
+                <span className="text-sm text-green-500 font-medium" data-testid="text-status">Online</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="h-4 w-4 text-amber-500" data-testid="icon-offline" />
+                <span className="text-sm text-amber-500 font-medium" data-testid="text-status">Offline</span>
+              </>
+            )}
+          </div>
+          {/* Search */}
+          <Button variant="outline" size="icon" data-testid="button-search">
+            <Search className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-card/50 border-primary/20">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card className="bg-gradient-to-br from-card/80 to-card/40 border-primary/20">
+          <CardHeader className="flex flex-row items-center justify-between gap-1 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Jobs</CardTitle>
             <Briefcase className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
+            <div className="text-2xl font-bold text-white" data-testid="stat-total">{stats.total}</div>
             <p className="text-xs text-muted-foreground">All assigned jobs</p>
           </CardContent>
         </Card>
-        <Card className="bg-card/50 border-amber-500/20">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        
+        <Card className="bg-gradient-to-br from-card/80 to-card/40 border-amber-500/20">
+          <CardHeader className="flex flex-row items-center justify-between gap-1 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
             <Clock className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-amber-500">{stats.pending}</div>
+            <div className="text-2xl font-bold text-amber-500" data-testid="stat-pending">{stats.pending}</div>
             <p className="text-xs text-muted-foreground">Requires attention</p>
           </CardContent>
         </Card>
-        <Card className="bg-card/50 border-blue-500/20">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        
+        <Card className="bg-gradient-to-br from-card/80 to-card/40 border-blue-500/20">
+          <CardHeader className="flex flex-row items-center justify-between gap-1 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">In Progress</CardTitle>
             <Activity className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-500">{stats.inProgress}</div>
+            <div className="text-2xl font-bold text-blue-500" data-testid="stat-inprogress">{stats.inProgress}</div>
             <p className="text-xs text-muted-foreground">Currently active</p>
           </CardContent>
         </Card>
-        <Card className="bg-card/50 border-green-500/20">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        
+        <Card className="bg-gradient-to-br from-card/80 to-card/40 border-green-500/20">
+          <CardHeader className="flex flex-row items-center justify-between gap-1 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">{stats.completed}</div>
+            <div className="text-2xl font-bold text-green-500" data-testid="stat-completed">{stats.completed}</div>
             <p className="text-xs text-muted-foreground">Successfully finished</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Content Split */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Active Jobs List */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold font-display">Active Assignments</h2>
-            <Link href="/jobs">
-              <Button variant="link" className="text-primary">View All</Button>
-            </Link>
-          </div>
-
-          <div className="space-y-4">
-            {jobs.slice(0, 3).map((job) => (
-              <Card key={job.id} className="bg-card/30 hover:bg-card/50 transition-colors border-border/50">
+      {/* Main Action Tiles */}
+      <div>
+        <h2 className="text-2xl font-bold font-display mb-4">System Modules</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {modules.map((module) => (
+            <Link key={module.title} href={module.path}>
+              <Card 
+                className={`bg-gradient-to-br ${colorMap[module.color]} transition-all duration-300 hover:scale-105 cursor-pointer h-full`}
+                data-testid={`card-module-${module.title.toLowerCase().replace(/\s+/g, '-')}`}
+              >
                 <CardContent className="p-6">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg font-bold text-white">{job.clientName}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                          job.status === 'In Progress' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
-                          job.status === 'Pending' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
-                          'bg-green-500/10 text-green-500 border-green-500/20'
-                        }`}>
-                          {job.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        {job.address}
-                      </div>
+                  <div className="flex items-start justify-between mb-4">
+                    <div className={`h-12 w-12 rounded-lg bg-card/50 flex items-center justify-center ${iconColorMap[module.color]}`}>
+                      <module.icon className="h-6 w-6" />
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right hidden md:block">
-                        <p className="text-xs text-muted-foreground">Job Type</p>
-                        <p className="text-sm font-medium text-primary">{job.type}</p>
-                      </div>
-                      <Button variant="outline" className="border-primary/20 hover:bg-primary/10 hover:text-primary">
-                        Details
-                      </Button>
-                    </div>
+                    {module.badge && (
+                      <Badge variant="outline" className="text-xs">
+                        {module.badge}
+                      </Badge>
+                    )}
                   </div>
+                  <h3 className="font-display font-bold text-lg text-white mb-2">
+                    {module.title}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {module.description}
+                  </p>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            </Link>
+          ))}
         </div>
+      </div>
 
-        {/* Side Panel - System Status */}
-        <div className="space-y-6">
-           <h2 className="text-xl font-bold font-display">System Status</h2>
-           
-           <Card className="bg-gradient-to-b from-card/80 to-card/40 border-border/50">
-             <CardHeader>
-               <CardTitle className="text-lg">Signal Quality</CardTitle>
-             </CardHeader>
-             <CardContent className="space-y-6">
-               <div className="space-y-2">
-                 <div className="flex justify-between text-sm">
-                   <span className="text-muted-foreground">Link Stability</span>
-                   <span className="text-green-500 font-mono">98.4%</span>
-                 </div>
-                 <Progress value={98} className="h-2 bg-white/5" indicatorClassName="bg-green-500" />
-               </div>
-               
-               <div className="space-y-2">
-                 <div className="flex justify-between text-sm">
-                   <span className="text-muted-foreground">Signal Strength (avg)</span>
-                   <span className="text-primary font-mono">-18.2 dBm</span>
-                 </div>
-                 <div className="h-24 w-full flex items-end gap-1 mt-2">
-                   {[40, 60, 45, 70, 65, 50, 80, 75, 60, 55].map((h, i) => (
-                     <div key={i} className="flex-1 bg-primary/20 rounded-t-sm hover:bg-primary/40 transition-colors" style={{ height: `${h}%` }} />
-                   ))}
-                 </div>
-               </div>
-             </CardContent>
-           </Card>
-
-           <Card className="bg-gradient-to-b from-card/80 to-card/40 border-border/50">
-             <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-full bg-purple-500/20 flex items-center justify-center">
-                    <AlertTriangle className="h-6 w-6 text-purple-500" />
+      {/* Recent Activity */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold font-display">Recent Jobs</h2>
+          <Link href="/jobs">
+            <Button variant="link" className="text-primary" data-testid="link-view-all-jobs">
+              View All →
+            </Button>
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 gap-3">
+          {jobs.slice(0, 3).map((job) => (
+            <Card 
+              key={job.id} 
+              className="bg-card/30 hover:bg-card/50 transition-colors border-border/50"
+              data-testid={`card-job-${job.id}`}
+            >
+              <CardContent className="p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-base font-bold text-white" data-testid={`text-client-${job.id}`}>
+                        {job.clientName}
+                      </span>
+                      <Badge 
+                        variant={
+                          job.status === 'In Progress' ? 'default' :
+                          job.status === 'Pending' ? 'secondary' :
+                          'outline'
+                        }
+                        className="text-xs"
+                        data-testid={`badge-status-${job.id}`}
+                      >
+                        {job.status}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <MapPin className="h-3 w-3" />
+                      <span data-testid={`text-address-${job.id}`}>{job.address}</span>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-white">Low Stock Alert</p>
-                    <p className="text-sm text-muted-foreground">SC/APC Connectors below threshold.</p>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right hidden sm:block">
+                      <p className="text-xs text-muted-foreground">Type</p>
+                      <p className="text-sm font-medium text-primary" data-testid={`text-type-${job.id}`}>
+                        {job.type}
+                      </p>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      data-testid={`button-details-${job.id}`}
+                    >
+                      Details
+                    </Button>
                   </div>
                 </div>
-                <Link href="/inventory">
-                  <Button variant="secondary" className="w-full mt-4 h-8 text-xs">
-                    View Inventory
-                  </Button>
-                </Link>
-             </CardContent>
-           </Card>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     </div>
