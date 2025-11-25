@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Layers, Navigation, Play, Pause, Save, AlertCircle, Activity, Zap, X, Edit, Link2, FileText, ChevronLeft, Menu, Download, Wifi, WifiOff, Trash2 } from "lucide-react";
+import { Plus, Layers, Navigation, Play, Pause, Save, AlertCircle, Activity, Zap, X, Edit, Link2, FileText, ChevronLeft, Menu, Download, Wifi, WifiOff, Trash2, Search, Filter, BarChart3, Zap as ZapIcon, Share2, FileUp, CheckSquare, Copy } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -17,6 +17,9 @@ import { jobsApi, gpsRoutesApi, authApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { getPowerStatus } from "@/lib/powerUtils";
 import { registerServiceWorker, downloadTilesForRegion, getOnlineStatus, onOnlineStatusChange, clearOfflineCache, getStorageInfo, formatBytes } from "@/lib/offlineMap";
+import { exportToJSON, exportToCSV, importFromJSON, importFromCSV, filterNodesBySearch, getNodeTypes } from "@/lib/dataUtils";
+import { analyzePowerDistribution, calculatePowerMetrics } from "@/lib/powerAnalysis";
+import { calculateDistance, findOptimalRoute, getRouteStats } from "@/lib/routeOptimization";
 import L from 'leaflet';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -226,6 +229,99 @@ export default function Map() {
       const info = await getStorageInfo();
       setStorageInfo(info);
     }
+  };
+
+  // Search & Filter state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<string>('All');
+  const [filterPower, setFilterPower] = useState<string>('All');
+  
+  // Bulk operations state
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const [showPowerAnalysis, setShowPowerAnalysis] = useState(false);
+  const [showRouteOptimization, setShowRouteOptimization] = useState(false);
+
+  // Collect all nodes for analysis
+  const allNodes = [
+    ...olts.map(n => ({ ...n, type: 'OLT', nodeId: `olt-${n.id}` })),
+    ...splitters.map(n => ({ ...n, type: 'Splitter', nodeId: `splitter-${n.id}` })),
+    ...fats.map(n => ({ ...n, type: 'FAT', nodeId: `fat-${n.id}` })),
+    ...atbs.map(n => ({ ...n, type: 'ATB', nodeId: `atb-${n.id}` })),
+    ...closures.map(n => ({ ...n, type: 'Closure', nodeId: `closure-${n.id}` })),
+  ];
+
+  // Filter nodes by search
+  const filteredNodes = filterNodesBySearch(
+    allNodes.map(n => ({
+      id: n.nodeId,
+      name: n.name,
+      type: n.type,
+      latitude: n.latitude || '0',
+      longitude: n.longitude || '0',
+      inputPower: n.inputPower,
+      location: n.location,
+      notes: n.notes,
+    })),
+    searchTerm,
+    filterType === 'All' ? undefined : filterType,
+    filterPower === 'All' ? undefined : filterPower
+  );
+
+  // Power analysis
+  const powerAnalysis = analyzePowerDistribution(allNodes);
+
+  // Toggle node selection for bulk ops
+  const toggleNodeSelection = (nodeId: string) => {
+    const newSelected = new Set(selectedNodeIds);
+    if (newSelected.has(nodeId)) {
+      newSelected.delete(nodeId);
+    } else {
+      newSelected.add(nodeId);
+    }
+    setSelectedNodeIds(newSelected);
+  };
+
+  // Export selected nodes
+  const handleExportJSON = () => {
+    if (selectedNodeIds.size === 0) {
+      toast({ title: "No nodes selected", description: "Select nodes to export" });
+      return;
+    }
+    const nodesToExport = filteredNodes.filter(n => selectedNodeIds.has(n.id));
+    exportToJSON(nodesToExport);
+    toast({ title: "Exported", description: `${nodesToExport.length} nodes exported to JSON` });
+  };
+
+  const handleExportCSV = () => {
+    if (selectedNodeIds.size === 0) {
+      toast({ title: "No nodes selected", description: "Select nodes to export" });
+      return;
+    }
+    const nodesToExport = filteredNodes.filter(n => selectedNodeIds.has(n.id));
+    exportToCSV(nodesToExport);
+    toast({ title: "Exported", description: `${nodesToExport.length} nodes exported to CSV` });
+  };
+
+  // Import handler
+  const handleImport = async (file: File) => {
+    try {
+      const data = file.name.endsWith('.json') 
+        ? await importFromJSON(file)
+        : await importFromCSV(file);
+      toast({ title: "Imported", description: `${data.length} nodes imported successfully` });
+    } catch (error) {
+      toast({ title: "Import failed", description: String(error) });
+    }
+  };
+
+  // Delete selected nodes
+  const handleDeleteSelected = () => {
+    if (selectedNodeIds.size === 0) {
+      toast({ title: "No nodes selected" });
+      return;
+    }
+    setSelectedNodeIds(new Set());
+    toast({ title: "Deletion not available", description: "Implement delete API endpoint to enable this" });
   };
 
   // Selected node state for details panel
@@ -607,7 +703,7 @@ export default function Map() {
   }
 
   return (
-    <div className="h-screen w-full flex gap-0 relative">
+    <div className="h-screen w-full flex gap-0 relative flex-col md:flex-row">
       {/* Collapsed Sidebar Toggle Button */}
       {!sidebarOpen && (
         <Button
@@ -621,8 +717,8 @@ export default function Map() {
         </Button>
       )}
 
-      {/* Sidebar with toggles */}
-      <div className={`bg-card border-r border-border/50 shadow-lg flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${sidebarOpen ? 'w-80' : 'w-0'}`}>
+      {/* Sidebar with toggles - responsive width and positioning */}
+      <div className={`bg-card border-r border-border/50 shadow-lg flex flex-col overflow-hidden transition-all duration-300 ease-in-out md:h-auto max-h-screen md:max-h-none ${sidebarOpen ? 'w-full md:w-80 h-1/3 md:h-auto' : 'w-0 h-0'}`}>
         <div className="w-80 overflow-y-auto flex-1">
           {/* Sidebar Header with Collapse Button */}
           <div className="sticky top-0 z-10 bg-card border-b border-border/50 p-2 flex items-center justify-between">
@@ -889,16 +985,204 @@ export default function Map() {
               </div>
             </Card>
           </div>
+
+          {/* Search & Filter Section */}
+          <div className="p-3 border-b border-border/50">
+            <Card className="bg-card/90 backdrop-blur-md border-border/50 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-bold text-sm flex items-center gap-1">
+                  <Search className="h-4 w-4 text-primary" />
+                  Search & Filter
+                </h3>
+              </div>
+              <div className="space-y-2">
+                <div className="relative">
+                  <Input
+                    placeholder="Search nodes..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="text-xs pl-7"
+                    data-testid="input-search"
+                  />
+                  <Search className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
+                </div>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="text-xs h-8" data-testid="select-node-type">
+                    <SelectValue placeholder="Filter by type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Types</SelectItem>
+                    <SelectItem value="OLT">OLT</SelectItem>
+                    <SelectItem value="Splitter">Splitter</SelectItem>
+                    <SelectItem value="FAT">FAT</SelectItem>
+                    <SelectItem value="ATB">ATB</SelectItem>
+                    <SelectItem value="Closure">Closure</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterPower} onValueChange={setFilterPower}>
+                  <SelectTrigger className="text-xs h-8" data-testid="select-power-level">
+                    <SelectValue placeholder="Filter by power" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Levels</SelectItem>
+                    <SelectItem value="High">High (≥0dB)</SelectItem>
+                    <SelectItem value="Medium">Medium (-10 to 0dB)</SelectItem>
+                    <SelectItem value="Low">Low (&lt;-10dB)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Badge variant="outline" className="w-full justify-center text-xs">
+                  {filteredNodes.length} nodes found
+                </Badge>
+              </div>
+            </Card>
+          </div>
+
+          {/* Bulk Operations Section */}
+          <div className="p-3 border-b border-border/50">
+            <Card className="bg-card/90 backdrop-blur-md border-border/50 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-bold text-sm flex items-center gap-1">
+                  <CheckSquare className="h-4 w-4 text-primary" />
+                  Bulk Operations
+                </h3>
+                {selectedNodeIds.size > 0 && (
+                  <Badge variant="default" className="text-xs">{selectedNodeIds.size} selected</Badge>
+                )}
+              </div>
+              <div className="space-y-2">
+                <div className="max-h-40 overflow-y-auto space-y-1 mb-2">
+                  {filteredNodes.map(node => (
+                    <div key={node.id} className="flex items-center gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={selectedNodeIds.has(node.id)}
+                        onChange={() => toggleNodeSelection(node.id)}
+                        className="h-3 w-3"
+                        data-testid={`checkbox-select-${node.id}`}
+                      />
+                      <span className="flex-1 truncate">{node.name}</span>
+                      <Badge variant="outline" className="text-xs px-1">{node.type}</Badge>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-1">
+                  <Button size="sm" variant="outline" onClick={handleExportJSON} data-testid="button-export-json">
+                    <Download className="h-3 w-3 mr-1" />
+                    JSON
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handleExportCSV} data-testid="button-export-csv">
+                    <Download className="h-3 w-3 mr-1" />
+                    CSV
+                  </Button>
+                  <label className="col-span-2">
+                    <input
+                      type="file"
+                      accept=".json,.csv"
+                      onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0])}
+                      className="hidden"
+                      data-testid="input-import"
+                    />
+                    <Button size="sm" variant="outline" className="w-full" asChild>
+                      <span>
+                        <FileUp className="h-3 w-3 mr-1" />
+                        Import
+                      </span>
+                    </Button>
+                  </label>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Power Analysis Section */}
+          <div className="p-3 border-b border-border/50">
+            <Card className="bg-card/90 backdrop-blur-md border-border/50 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-bold text-sm flex items-center gap-1">
+                  <BarChart3 className="h-4 w-4 text-primary" />
+                  Power Analysis
+                </h3>
+              </div>
+              <div className="text-xs space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-secondary rounded p-2">
+                    <p className="text-muted-foreground text-xs">Avg Power</p>
+                    <p className="font-bold">{powerAnalysis.avgPower.toFixed(1)}dB</p>
+                  </div>
+                  <div className="bg-secondary rounded p-2">
+                    <p className="text-muted-foreground text-xs">Range</p>
+                    <p className="font-bold">{powerAnalysis.minPower.toFixed(1)} → {powerAnalysis.maxPower.toFixed(1)}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-1">
+                  <div className="text-center">
+                    <div className="text-green-500 font-bold">{powerAnalysis.powerDistribution.high}</div>
+                    <div className="text-xs text-muted-foreground">Good</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-yellow-500 font-bold">{powerAnalysis.powerDistribution.medium}</div>
+                    <div className="text-xs text-muted-foreground">Med</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-orange-500 font-bold">{powerAnalysis.powerDistribution.low}</div>
+                    <div className="text-xs text-muted-foreground">Low</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-red-500 font-bold">{powerAnalysis.powerDistribution.critical}</div>
+                    <div className="text-xs text-muted-foreground">Crit</div>
+                  </div>
+                </div>
+                {powerAnalysis.criticalNodes.length > 0 && (
+                  <div className="bg-destructive/10 rounded p-2">
+                    <p className="font-bold text-xs text-destructive mb-1">Critical Nodes:</p>
+                    <div className="space-y-1">
+                      {powerAnalysis.criticalNodes.slice(0, 3).map(node => (
+                        <p key={node.nodeId} className="text-xs text-destructive">
+                          {node.nodeName}: {node.power.toFixed(1)}dB
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          {/* Route Optimization Section */}
+          <div className="p-3">
+            <Card className="bg-card/90 backdrop-blur-md border-border/50 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-bold text-sm flex items-center gap-1">
+                  <Share2 className="h-4 w-4 text-primary" />
+                  Route Optimization
+                </h3>
+              </div>
+              <div className="text-xs space-y-2">
+                <p className="text-muted-foreground">
+                  Select 2+ nodes and draw routes to optimize fiber paths and minimize power loss.
+                </p>
+                <div className="bg-secondary rounded p-2 space-y-1">
+                  <p className="font-bold">Tips:</p>
+                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                    <li>Click nodes to select start/end</li>
+                    <li>Check power levels before routing</li>
+                    <li>Use offline map for field work</li>
+                    <li>Export route plans as JSON</li>
+                  </ul>
+                </div>
+              </div>
+            </Card>
+          </div>
         </div>
       </div>
 
-      {/* Map Container */}
-      <div className="flex-1 h-screen relative overflow-hidden">
+      {/* Map Container - responsive height for mobile */}
+      <div className={`flex-1 relative overflow-hidden transition-all duration-300 ${sidebarOpen ? 'h-2/3 md:h-screen' : 'h-screen'}`}>
         <MapContainer 
           center={center} 
           zoom={14} 
           scrollWheelZoom={true} 
-          style={{ height: '100vh', width: '100%', background: '#0f172a' }}
+          style={{ height: '100%', width: '100%', background: '#0f172a' }}
           className="z-0"
         >
         <MapController center={center} />
