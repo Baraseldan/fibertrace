@@ -780,6 +780,92 @@ export default function Map() {
           <Plus className="h-6 w-6" />
         </Button>
       </div>
+
+      {/* Node Details Panel */}
+      {selectedNode && (
+        <div className="absolute bottom-8 left-4 z-[400] max-w-sm">
+          <Card className="bg-card/95 backdrop-blur-md border-border/50 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <div className="h-3 w-3 rounded" style={{
+                  backgroundColor: selectedNode.type === 'OLT' ? '#3b82f6' :
+                                  selectedNode.type === 'Splitter' ? '#10b981' :
+                                  selectedNode.type === 'FAT' ? '#f59e0b' :
+                                  selectedNode.type === 'ATB' ? '#8b5cf6' :
+                                  '#ec4899'
+                }} />
+                {selectedNode.data.name}
+              </h3>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setSelectedNode(null)}
+                data-testid="button-close-details"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <Badge className="text-xs mb-3">{selectedNode.type}</Badge>
+
+            <div className="space-y-2 mb-4 text-xs">
+              <p><strong>Location:</strong> {selectedNode.data.location}</p>
+              
+              {selectedNode.type === 'OLT' && (
+                <>
+                  <p><strong>Capacity:</strong> {selectedNode.data.capacity} ports</p>
+                  <p><strong>Used:</strong> {selectedNode.data.usedPorts}/{selectedNode.data.capacity}</p>
+                  {selectedNode.data.vendor && <p><strong>Vendor:</strong> {selectedNode.data.vendor}</p>}
+                </>
+              )}
+
+              {(selectedNode.type === 'Splitter' || selectedNode.type === 'FAT' || selectedNode.type === 'ATB') && (
+                <>
+                  {selectedNode.type !== 'Splitter' && <p><strong>Ports:</strong> {selectedNode.data.usedPorts}/{selectedNode.data.totalPorts}</p>}
+                  {selectedNode.type === 'Splitter' && <p><strong>Ratio:</strong> {selectedNode.data.splitRatio}</p>}
+                  {selectedNode.data.inputPower && (
+                    <p className="flex items-center gap-1">
+                      <Zap className="h-3 w-3" />
+                      <strong>Power:</strong> {selectedNode.data.inputPower} dBm
+                    </p>
+                  )}
+                </>
+              )}
+
+              {selectedNode.type === 'Closure' && (
+                <>
+                  <p><strong>Type:</strong> {selectedNode.data.type}</p>
+                  <p><strong>Fibers:</strong> {selectedNode.data.fiberCount}</p>
+                  <p><strong>Splices:</strong> {selectedNode.data.spliceCount}</p>
+                  {selectedNode.data.inputPower && (
+                    <p className="flex items-center gap-1">
+                      <Zap className="h-3 w-3" />
+                      <strong>Power:</strong> {selectedNode.data.inputPower} dBm
+                    </p>
+                  )}
+                </>
+              )}
+
+              <p><strong>Status:</strong> <Badge variant={selectedNode.data.status === 'Active' ? 'default' : 'secondary'} className="text-xs">{selectedNode.data.status}</Badge></p>
+            </div>
+
+            <div className="flex gap-2 flex-wrap">
+              <Button size="sm" variant="outline" data-testid="button-edit-node">
+                <Edit className="h-3 w-3 mr-1" />
+                Edit
+              </Button>
+              <Button size="sm" variant="outline" data-testid="button-link-node">
+                <Link2 className="h-3 w-3 mr-1" />
+                Link
+              </Button>
+              <Button size="sm" variant="outline" data-testid="button-notes">
+                <FileText className="h-3 w-3 mr-1" />
+                Notes
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
