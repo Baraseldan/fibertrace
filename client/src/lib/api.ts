@@ -17,18 +17,24 @@ export const authApi = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
+      credentials: "include",
     });
     if (!res.ok) throw new Error("Login failed");
     return res.json();
   },
 
   async logout(): Promise<void> {
-    const res = await fetch(`${API_BASE}/auth/logout`, { method: "POST" });
+    const res = await fetch(`${API_BASE}/auth/logout`, { 
+      method: "POST",
+      credentials: "include",
+    });
     if (!res.ok) throw new Error("Logout failed");
   },
 
   async me(): Promise<Omit<User, 'password'>> {
-    const res = await fetch(`${API_BASE}/auth/me`);
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      credentials: "include",
+    });
     if (!res.ok) throw new Error("Not authenticated");
     return res.json();
   },
@@ -37,13 +43,17 @@ export const authApi = {
 // Jobs API
 export const jobsApi = {
   async getAll(): Promise<JobWithClient[]> {
-    const res = await fetch(`${API_BASE}/jobs`);
+    const res = await fetch(`${API_BASE}/jobs`, {
+      credentials: "include",
+    });
     if (!res.ok) throw new Error("Failed to fetch jobs");
     return res.json();
   },
 
   async getById(id: number): Promise<Job> {
-    const res = await fetch(`${API_BASE}/jobs/${id}`);
+    const res = await fetch(`${API_BASE}/jobs/${id}`, {
+      credentials: "include",
+    });
     if (!res.ok) throw new Error("Failed to fetch job");
     return res.json();
   },
@@ -53,6 +63,7 @@ export const jobsApi = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(job),
+      credentials: "include",
     });
     if (!res.ok) throw new Error("Failed to create job");
     return res.json();
@@ -63,6 +74,7 @@ export const jobsApi = {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(job),
+      credentials: "include",
     });
     if (!res.ok) throw new Error("Failed to update job");
     return res.json();

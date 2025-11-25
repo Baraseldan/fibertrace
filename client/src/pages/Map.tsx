@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Layers, Navigation, Play, Pause, Save, AlertCircle, Activity, Zap } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { jobsApi, gpsRoutesApi } from "@/lib/api";
+import { jobsApi, gpsRoutesApi, authApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { getPowerStatus } from "@/lib/powerUtils";
 import L from 'leaflet';
@@ -87,29 +87,43 @@ export default function Map() {
   const [permissionState, setPermissionState] = useState<GPSPermissionState>('prompt');
   const watchIdRef = useRef<number | null>(null);
 
+  // Check authentication first
+  const { data: user, isLoading: authLoading, error: authError } = useQuery({
+    queryKey: ['/api/auth/me'],
+    queryFn: authApi.me,
+    retry: false,
+  });
+
+  // Only fetch map data if authenticated
   const { data: jobs = [], isLoading: jobsLoading, error: jobsError } = useQuery({
     queryKey: ['jobs'],
     queryFn: jobsApi.getAll,
+    enabled: !!user,
   });
 
   const { data: olts = [], isLoading: oltsLoading, error: oltsError } = useQuery<Olt[]>({
     queryKey: ['/api/olts'],
+    enabled: !!user,
   });
 
   const { data: splitters = [], isLoading: splittersLoading, error: splittersError } = useQuery<Splitter[]>({
     queryKey: ['/api/splitters'],
+    enabled: !!user,
   });
 
   const { data: fats = [], isLoading: fatsLoading, error: fatsError } = useQuery<Fat[]>({
     queryKey: ['/api/fats'],
+    enabled: !!user,
   });
 
   const { data: atbs = [], isLoading: atbsLoading, error: atbsError } = useQuery<Atb[]>({
     queryKey: ['/api/atbs'],
+    enabled: !!user,
   });
 
   const { data: closures = [], isLoading: closuresLoading, error: closuresError } = useQuery<Closure[]>({
     queryKey: ['/api/closures'],
+    enabled: !!user,
   });
 
   const saveGPSRouteMutation = useMutation({
@@ -327,6 +341,41 @@ export default function Map() {
       }
     };
   }, []);
+
+  // Check authentication loading
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-8rem)]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login message if not authenticated
+  if (authError || !user) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-8rem)]">
+        <Card className="p-6 max-w-md">
+          <div className="text-center">
+            <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Authentication Required</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Please log in to access the map and fiber network data.
+            </p>
+            <Button 
+              onClick={() => window.location.href = '/'} 
+              data-testid="button-login"
+            >
+              Go to Login
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   // Check for any loading states
   const isLoading = jobsLoading || oltsLoading || splittersLoading || fatsLoading || atbsLoading || closuresLoading;
