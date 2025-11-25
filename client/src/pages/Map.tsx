@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Layers, Navigation, Play, Pause, Save, AlertCircle, Activity, Zap, X, Edit, Link2, FileText } from "lucide-react";
+import { Plus, Layers, Navigation, Play, Pause, Save, AlertCircle, Activity, Zap, X, Edit, Link2, FileText, ChevronLeft, Menu } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -155,6 +155,9 @@ export default function Map() {
   const toggleLayer = (layer: keyof typeof layerVisibility) => {
     setLayerVisibility(prev => ({ ...prev, [layer]: !prev[layer] }));
   };
+
+  // Sidebar visibility state
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Selected node state for details panel
   const [selectedNode, setSelectedNode] = useState<{
@@ -535,10 +538,40 @@ export default function Map() {
   }
 
   return (
-    <div className="h-screen w-full flex gap-0">
+    <div className="h-screen w-full flex gap-0 relative">
+      {/* Collapsed Sidebar Toggle Button */}
+      {!sidebarOpen && (
+        <Button
+          size="icon"
+          variant="outline"
+          onClick={() => setSidebarOpen(true)}
+          className="absolute top-4 left-4 z-[500] rounded-md"
+          data-testid="button-expand-sidebar"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+      )}
+
       {/* Sidebar with toggles */}
-      <div className="w-80 bg-card border-r border-border/50 shadow-lg flex flex-col overflow-hidden">
-        <div className="overflow-y-auto flex-1">
+      <div className={`bg-card border-r border-border/50 shadow-lg flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${sidebarOpen ? 'w-80' : 'w-0'}`}>
+        <div className="w-80 overflow-y-auto flex-1">
+          {/* Sidebar Header with Collapse Button */}
+          <div className="sticky top-0 z-10 bg-card border-b border-border/50 p-2 flex items-center justify-between">
+            <h2 className="text-sm font-bold flex items-center gap-2">
+              <Layers className="h-4 w-4 text-primary" />
+              Controls
+            </h2>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setSidebarOpen(false)}
+              className="h-8 w-8"
+              data-testid="button-collapse-sidebar"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          </div>
+
           {/* GPS Tracking Section */}
           <div className="p-3 border-b border-border/50">
             <Card className="bg-card/90 backdrop-blur-md border-border/50 p-3">
