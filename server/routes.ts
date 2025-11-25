@@ -203,10 +203,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Job Routes
-  app.get("/api/jobs", requireAuth, async (req, res) => {
+  app.get("/api/jobs", async (req, res) => {
     try {
-      const jobs = await storage.getJobsByTechnician(req.session!.userId!);
-      res.json(jobs);
+      const userId = req.session?.userId;
+      if (userId) {
+        const jobs = await storage.getJobsByTechnician(userId);
+        res.json(jobs);
+      } else {
+        res.json([]);
+      }
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -389,7 +394,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GPON Topology Management Routes
 
   // OLT Routes
-  app.get("/api/olts", requireAuth, async (req, res) => {
+  app.get("/api/olts", async (req, res) => {
     try {
       const olts = await storage.getOlts();
       res.json(olts);
@@ -465,7 +470,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Splitter Routes
-  app.get("/api/splitters", requireAuth, async (req, res) => {
+  app.get("/api/splitters", async (req, res) => {
     try {
       const splitters = await storage.getSplitters();
       res.json(splitters);
@@ -524,7 +529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // FAT Routes
-  app.get("/api/fats", requireAuth, async (req, res) => {
+  app.get("/api/fats", async (req, res) => {
     try {
       const fats = await storage.getFats();
       res.json(fats);
@@ -573,7 +578,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ATB Routes
-  app.get("/api/atbs", requireAuth, async (req, res) => {
+  app.get("/api/atbs", async (req, res) => {
     try {
       const atbs = await storage.getAtbs();
       res.json(atbs);
@@ -602,7 +607,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Closure Routes
-  app.get("/api/closures", requireAuth, async (req, res) => {
+  app.get("/api/closures", async (req, res) => {
     try {
       const closures = await storage.getClosures();
       res.json(closures);
