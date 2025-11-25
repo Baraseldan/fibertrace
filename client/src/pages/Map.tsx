@@ -402,8 +402,7 @@ export default function Map() {
     if (selectedNode && routeStartNode) {
       const lat = parseFloat(selectedNode.data.latitude);
       const lng = parseFloat(selectedNode.data.longitude);
-      const distanceMeters = calculateDistance([routeStartNode.lat, routeStartNode.lng], [lat, lng]);
-      const distanceKm = distanceMeters / 1000; // Convert to km
+      const distanceKm = calculateDistance(routeStartNode.lat, routeStartNode.lng, lat, lng);
       const cableRequired = distanceKm * 1.1; // 10% slack
       
       setRouteEndNode({
@@ -631,8 +630,8 @@ export default function Map() {
     saveGPSRouteMutation.mutate(gpsPath);
   };
 
-  // Calculate distance between two GPS points (Haversine formula)
-  const calculateDistance = (point1: [number, number], point2: [number, number]): number => {
+  // Calculate distance between two GPS points (Haversine formula) - local version for GPS path
+  const calculateLocalDistance = (point1: [number, number], point2: [number, number]): number => {
     const R = 6371000; // Earth's radius in meters
     const lat1 = point1[0] * Math.PI / 180;
     const lat2 = point2[0] * Math.PI / 180;
@@ -651,7 +650,7 @@ export default function Map() {
   const calculateTotalDistance = (path: [number, number][]): number => {
     let total = 0;
     for (let i = 1; i < path.length; i++) {
-      total += calculateDistance(path[i - 1], path[i]);
+      total += calculateLocalDistance(path[i - 1], path[i]);
     }
     return total;
   };
@@ -719,7 +718,7 @@ export default function Map() {
 
       {/* Sidebar with toggles - responsive width and positioning */}
       <div className={`bg-card border-r border-border/50 shadow-lg flex flex-col overflow-hidden transition-all duration-300 ease-in-out md:h-auto max-h-screen md:max-h-none ${sidebarOpen ? 'w-full md:w-80 h-1/3 md:h-auto' : 'w-0 h-0'}`}>
-        <div className="w-80 overflow-y-auto flex-1">
+        <div className="w-full md:w-80 overflow-y-auto flex-1">
           {/* Sidebar Header with Collapse Button */}
           <div className="sticky top-0 z-10 bg-card border-b border-border/50 p-2 flex items-center justify-between">
             <h2 className="text-sm font-bold flex items-center gap-2">
