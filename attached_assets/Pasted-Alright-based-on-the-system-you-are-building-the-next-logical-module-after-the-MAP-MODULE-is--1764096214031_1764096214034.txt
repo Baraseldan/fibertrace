@@ -1,0 +1,292 @@
+Alright — based on the system you are building, the **next logical module after the MAP MODULE** is:
+
+# ⭐ **NODE MANAGEMENT MODULE**
+
+*(This is the heart of the fiber network system — it handles all fiber nodes, closures, splitters, OLTs, FATs, ATBs, domes, underground closures, cabinets, etc.)*
+
+Below is the **FULL workflow logic** for the Node Management module.
+No coding. No UI styles. Pure functional logic.
+
+---
+
+# 🔷 **1. NODE MANAGEMENT MODULE — WORKFLOW LOGIC**
+
+---
+
+# **1. NODE LOADING & CLASSIFICATION WORKFLOW**
+
+### **1.1 Load Node Database**
+
+When this module opens:
+
+* System loads all nodes stored locally
+* Classifies them by type:
+
+  * OLT
+  * Splitters (1:2 to 1:128)
+  * FAT
+  * ATB
+  * Dome Closure
+  * Flat Closure
+  * Underground Closure
+  * Pedestal Cabinet
+  * Mini Node
+  * Junction / DP Box
+  * Core Node
+  * Access Node
+  * Distribution Node
+
+### **1.2 Display Node Table**
+
+Each node entry shows:
+
+* Node ID
+* Type
+* Coordinates
+* Power In / Out
+* Connected Nodes
+* Status
+* Last update method (Manual / Bluetooth)
+
+---
+
+# 🔷 **2. NODE CREATION WORKFLOW**
+
+## **2.1 Create New Node**
+
+Trigger: User presses “Add Node”
+
+Workflow:
+
+1. System opens node creation form
+2. User selects:
+
+   * Node Type
+   * Node ID
+   * Node label (e.g., FAT-021)
+   * Coordinates (GPS/manual)
+   * Power Level (optional)
+   * Parent Node (optional)
+3. User adds:
+
+   * Photos (before/after)
+   * Condition (new, existing, damaged)
+   * Inventory used (optional)
+   * Notes
+4. System saves node → adds to database
+5. Node appears in:
+
+   * Node list
+   * Map module automatically
+
+---
+
+# 🔷 **3. NODE EDIT WORKFLOW**
+
+1. User selects a node from table/list
+2. Opens full details
+3. Allowed edits:
+
+   * Node type
+   * Power readings
+   * Splitter type
+   * Linked nodes
+   * Attachments
+   * Coordinates
+4. System validates changes
+5. Updates downstream values (especially power)
+6. Saves change history for reporting
+
+---
+
+# 🔷 **4. NODE LINKING WORKFLOW**
+
+This builds the network topology.
+
+### **4.1 Link Node to Parent**
+
+Examples:
+
+* OLT → Splitter
+* Splitter → FAT
+* FAT → ATB
+* Dome → Distribution → Drop Line
+
+Workflow:
+
+1. User clicks “Link Node”
+2. System displays nearby nodes or searchable list
+3. User selects target node
+4. System asks:
+
+   * Fiber segment used
+   * Port used (if splitter)
+5. System confirms link
+6. Auto updates:
+
+   * Network structure
+   * Power chain
+   * Map routes (if existing)
+
+---
+
+# 🔷 **5. NODE POWER WORKFLOW**
+
+## **5.1 Manual Power Entry**
+
+For nodes like:
+
+* OLT
+* Splitters
+* FAT
+* Dome closures
+* ATB
+
+Workflow:
+
+1. User selects node → presses “Power Update”
+2. Inputs:
+
+   * Power IN
+   * Splitter type (auto loss)
+3. System calculates:
+
+   * Power OUT
+   * Cumulative loss
+   * Alerts if too high/too low
+4. System updates downstream nodes
+
+---
+
+## **5.2 Automatic Power Entry (Bluetooth Splicer/OTDR)**
+
+Workflow:
+
+1. User selects “Update via Bluetooth”
+2. App connects to device
+3. Device sends:
+
+   * Splice loss
+   * Fiber ID
+   * Measurement
+4. System updates:
+
+   * Node power
+   * Loss value
+   * Splice info
+5. Shows confirmation
+6. Stores event for reporting
+
+---
+
+# 🔷 **6. NODE CONDITION & MAINTENANCE WORKFLOW**
+
+Each node has a status:
+
+* OK
+* Needs service
+* Damaged
+* Unknown
+* Under maintenance
+* Completed
+
+Workflow:
+
+1. User taps “Update Condition”
+2. Adds:
+
+   * Photos
+   * Notes
+   * Location mark
+3. System updates node health record
+4. Automatically adds this to daily reports
+
+---
+
+# 🔷 **7. NODE INVENTORY TRACKING WORKFLOW**
+
+For each node:
+
+* System logs materials used:
+
+  * Splitters
+  * Closure kits
+  * Drop cables
+  * Splice protectors
+  * Heat shrinks
+  * Pig tails
+  * Connectors
+
+Workflow:
+
+1. User selects “Add Inventory”
+2. Chooses item from inventory list
+3. Inputs:
+
+   * Quantity used
+   * Condition of old parts
+4. System subtracts from stock
+5. Logs entry for reporting
+
+---
+
+# 🔷 **8. NODE REPORTING WORKFLOW**
+
+Node reports contain:
+
+* Node details
+* Power readings
+* Connectivity chain
+* Splice losses
+* Photos
+* Inventory used
+* Technician
+* GPS location
+* Date/time
+
+Reports can be:
+
+* Daily summary
+* Node-based report
+* Job-based report
+* Fault summary
+
+Exports offline → PDF
+
+---
+
+# 🔷 **9. SYNC WORKFLOW (CLOUD)**
+
+When internet is available:
+
+1. System checks for unsynced nodes
+2. Uploads:
+
+   * Node data
+   * Power records
+   * Photos
+   * Splice data
+3. Downloads latest server updates
+4. Merges using timestamps
+5. Updates local database
+
+---
+
+# 🔷 If you are ready, the **next module** logically is:
+
+### 📌 **FIBER ROUTE MANAGEMENT MODULE**
+
+*or*
+
+### 📌 **POWER CALCULATION + SPLITTER SIMULATION MODULE**
+
+*or*
+
+### 📌 **INVENTORY & DEVICE STATUS MODULE**
+
+*or*
+
+### 📌 **DAILY JOB REPORTS MODULE**
+
+Just tell me:
+👉 **Which module should I describe next?**
