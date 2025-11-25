@@ -195,6 +195,66 @@ export default function Map() {
     form.reset();
   };
 
+  // Fiber route drawing state
+  const [routeDrawingMode, setRouteDrawingMode] = useState(false);
+  const [routeStartNode, setRouteStartNode] = useState<{
+    type: string;
+    lat: number;
+    lng: number;
+    name: string;
+  } | null>(null);
+  const [routeEndNode, setRouteEndNode] = useState<{
+    type: string;
+    lat: number;
+    lng: number;
+    name: string;
+  } | null>(null);
+  const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
+
+  const handleStartRoute = () => {
+    if (selectedNode) {
+      const lat = parseFloat(selectedNode.data.latitude);
+      const lng = parseFloat(selectedNode.data.longitude);
+      setRouteStartNode({
+        type: selectedNode.type,
+        lat,
+        lng,
+        name: selectedNode.data.name,
+      });
+      setRouteDrawingMode(true);
+      setSelectedNode(null);
+      toast({
+        title: "Route Drawing Started",
+        description: `Selected ${selectedNode.data.name} as start node. Click another node to complete the route.`,
+      });
+    }
+  };
+
+  const handleCompleteRoute = () => {
+    if (selectedNode && routeStartNode) {
+      const lat = parseFloat(selectedNode.data.latitude);
+      const lng = parseFloat(selectedNode.data.longitude);
+      const distanceMeters = calculateDistance([routeStartNode.lat, routeStartNode.lng], [lat, lng]);
+      const distanceKm = distanceMeters / 1000; // Convert to km
+      const cableRequired = distanceKm * 1.1; // 10% slack
+      
+      setRouteEndNode({
+        type: selectedNode.type,
+        lat,
+        lng,
+        name: selectedNode.data.name,
+      });
+      setCalculatedDistance(distanceKm);
+      setRouteDrawingMode(false);
+      
+      toast({
+        title: "Route Created",
+        description: `Route: ${routeStartNode.name} → ${selectedNode.data.name}. Distance: ${distanceKm.toFixed(2)} km, Cable needed: ${cableRequired.toFixed(2)} km`,
+      });
+      setSelectedNode(null);
+    }
+  };
+
   // Check authentication first
   const { data: user, isLoading: authLoading, error: authError } = useQuery({
     queryKey: ['/api/auth/me'],
@@ -558,6 +618,29 @@ export default function Map() {
             weight={2} 
             opacity={0.5} 
             dashArray="5, 10" 
+          />
+        )}
+
+        {/* Fiber Route Being Drawn */}
+        {routeDrawingMode && routeStartNode && routeEndNode && (
+          <Polyline 
+            positions={[[routeStartNode.lat, routeStartNode.lng], [routeEndNode.lat, routeEndNode.lng]]} 
+            color="#06b6d4" 
+            weight={3} 
+            opacity={0.9}
+            data-testid="route-line"
+          />
+        )}
+
+        {/* Completed Fiber Route */}
+        {calculatedDistance && routeStartNode && routeEndNode && !routeDrawingMode && (
+          <Polyline 
+            positions={[[routeStartNode.lat, routeStartNode.lng], [routeEndNode.lat, routeEndNode.lng]]} 
+            color="#06b6d4" 
+            weight={3} 
+            opacity={0.7}
+            dashArray="10, 5"
+            data-testid="completed-route"
           />
         )}
 
@@ -936,19 +1019,42 @@ export default function Map() {
             </div>
 
             <div className="flex gap-2 flex-wrap">
-              <Button size="sm" variant="outline" data-testid="button-edit-node">
-                <Edit className="h-3 w-3 mr-1" />
-                Edit
-              </Button>
-              <Button size="sm" variant="outline" data-testid="button-link-node">
-                <Link2 className="h-3 w-3 mr-1" />
-                Link
-              </Button>
-              <Button size="sm" variant="outline" data-testid="button-notes">
-                <FileText className="h-3 w-3 mr-1" />
-                Notes
-              </Button>
+              {!routeDrawingMode ? (
+                <>
+                  <Button size="sm" variant="outline" onClick={handleStartRoute} data-testid="button-start-route">
+                    <Plus className="h-3 w-3 mr-1" />
+                    Start Route
+                  </Button>
+                  <Button size="sm" variant="outline" data-testid="button-edit-node">
+                    <Edit className="h-3 w-3 mr-1" />
+                    Edit
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button size="sm" variant="default" onClick={handleCompleteRoute} data-testid="button-complete-route">
+                    <Plus className="h-3 w-3 mr-1" />
+                    Complete Route
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => {
+                    setRouteDrawingMode(false);
+                    setRouteStartNode(null);
+                    setSelectedNode(null);
+                  }} data-testid="button-cancel-route">
+                    Cancel
+                  </Button>
+                </>
+              )}
             </div>
+
+            {calculatedDistance && routeStartNode && routeEndNode && (
+              <div className="mt-3 p-2 bg-primary/10 rounded text-xs">
+                <p className="font-bold mb-1">Route Info:</p>
+                <p>{routeStartNode.name} → {routeEndNode.name}</p>
+                <p>Distance: {calculatedDistance.toFixed(2)} km</p>
+                <p>Cable Required (10% slack): {(calculatedDistance * 1.1).toFixed(2)} km</p>
+              </div>
+            )}
           </Card>
         </div>
       )}
