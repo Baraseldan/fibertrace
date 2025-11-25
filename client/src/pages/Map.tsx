@@ -545,10 +545,10 @@ export default function Map() {
           size="icon"
           variant="outline"
           onClick={() => setSidebarOpen(true)}
-          className="absolute top-4 left-4 z-[500] rounded-md"
+          className="absolute top-3 left-3 z-[500] rounded-md h-8 w-8"
           data-testid="button-expand-sidebar"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-4 w-4" />
         </Button>
       )}
 
@@ -764,12 +764,12 @@ export default function Map() {
       </div>
 
       {/* Map Container */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 h-screen relative overflow-hidden">
         <MapContainer 
           center={center} 
           zoom={14} 
           scrollWheelZoom={true} 
-          style={{ height: '100%', width: '100%', background: '#0f172a' }}
+          style={{ height: '100vh', width: '100%', background: '#0f172a' }}
           className="z-0"
         >
         <MapController center={center} />
