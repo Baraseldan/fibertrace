@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,18 @@ import {
   FlatList,
   TouchableOpacity,
   ScrollView,
+  Modal,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { colors } from '../theme/colors';
+import { JobDetailsScreen } from './JobDetailsScreen';
 
 export function JobsScreen() {
-  const { data: jobs = [], isLoading } = useQuery({
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
+  const queryClient = useQueryClient();
+
+  const { data: jobs = [], isLoading, refetch } = useQuery({
     queryKey: ['/api/jobs'],
     queryFn: () => api.getJobs(),
   });
@@ -24,7 +29,10 @@ export function JobsScreen() {
   };
 
   const JobCard = ({ job }: { job: any }) => (
-    <View style={styles.jobCard}>
+    <TouchableOpacity
+      style={styles.jobCard}
+      onPress={() => setSelectedJobId(job.id)}
+    >
       <View style={styles.jobHeader}>
         <Text style={styles.jobType}>{job.type}</Text>
         <View
@@ -41,7 +49,8 @@ export function JobsScreen() {
         Scheduled: {new Date(job.scheduledDate).toLocaleDateString()}
       </Text>
       {job.notes && <Text style={styles.jobNotes}>{job.notes}</Text>}
-    </View>
+      <Text style={styles.tapHint}>Tap to view details →</Text>
+    </TouchableOpacity>
   );
 
   return (
@@ -61,7 +70,27 @@ export function JobsScreen() {
           keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
           renderItem={({ item }) => <JobCard job={item} />}
           contentContainerStyle={styles.list}
+          refreshing={isLoading}
+          onRefresh={() => refetch()}
         />
+      )}
+
+      {/* Job Details Modal */}
+      {selectedJobId && (
+        <Modal
+          visible={selectedJobId !== null}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setSelectedJobId(null)}
+        >
+          <JobDetailsScreen
+            jobId={selectedJobId}
+            onClose={() => {
+              setSelectedJobId(null);
+              refetch();
+            }}
+          />
+        </Modal>
       )}
     </View>
   );
@@ -138,5 +167,12 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     fontSize: 12,
     fontStyle: 'italic',
+    marginBottom: 6,
+  },
+  tapHint: {
+    color: colors.primary,
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: 4,
   },
 });

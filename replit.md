@@ -31,42 +31,60 @@ The application features a dark-themed UI with neon-blue accents, creating a tec
 
 Preferred communication style: Simple, everyday language.
 
-## Recent Implementation - Mobile App Conversion (November 25, 2025)
+## Recent Implementation - Mobile App with Operational Enhancements (November 25, 2025)
 
-### React Native Mobile App Created ✅
+### React Native Mobile App with Job Fine-Tuning ✅
 
 **NEW `/mobile` directory with React Native + Expo:**
-- Interactive map with all fiber node types (OLT, Splitter, FAT, ATB, Closure)
-- Jobs management screen with status tracking
-- GPS tracking integration
-- Bottom tab navigation (Map / Jobs)
-- Dark theme with neon-blue accents (matches web design perfectly)
-- Connects to same Express backend API
-- Ready for iOS/Android deployment
+- **Interactive Map** - All fiber node types (OLT, Splitter, FAT, ATB, Closure) with multi-select
+- **Job Management** - Create, edit, and track jobs with full lifecycle
+- **Node-Based Planning** - Select multiple nodes for route planning
+- **GPS Tracking** - Real-time route recording with auto-calculations
+- **Route Optimization** - Auto-estimate cable needs and completion time
+- **Job Details Screen** - Full job info, status updates, notes editing
+- **Dark Theme** - Neon-blue accents matching web design
+- **Backend Sync** - Same Express API as web app
 
 **Mobile App Structure:**
 ```
 mobile/
 ├── src/
-│   ├── screens/     # MapScreen.tsx, JobsScreen.tsx
-│   ├── lib/         # API client, utilities
-│   ├── theme/       # Color system matching web design
-│   └── App.tsx      # Tab navigation
-├── app.json         # Expo configuration
-├── package.json     # React Native dependencies
-└── README.md        # Full mobile documentation
+│   ├── screens/         # Map, Jobs, JobDetails, JobForm
+│   ├── lib/
+│   │   ├── api.ts       # Backend client with job CRUD
+│   │   ├── jobManager.ts # Job optimization logic
+│   │   └── utils.ts     # GPS & calculations
+│   ├── theme/           # Dark theme colors
+│   └── App.tsx          # Tab navigation
+├── app.json             # Expo config
+├── package.json         # Dependencies
+├── OPERATIONAL_ENHANCEMENTS.md  # Feature guide
+└── README.md            # Full docs
 ```
+
+**Operational Enhancements:**
+- ✅ Multi-node route creation from map
+- ✅ Automatic cable & time estimation
+- ✅ GPS path tracking with distance calculation
+- ✅ Job creation form with route preview
+- ✅ Full job details view with edit capability
+- ✅ Status management (Pending → In Progress → Completed)
+- ✅ Fiber route persistence to backend
+- ✅ Power impact analysis based on node count
 
 **Quick Start:**
 ```bash
 cd mobile
 npm install --legacy-peer-deps
-npm start           # Development server
-npm run ios         # iOS simulator
-npm run android     # Android emulator
+npm start                # Dev server
+npm run ios              # iOS simulator
+npm run android          # Android emulator
 ```
 
-**Full setup guide:** See `mobile/MOBILE_SETUP.md`
+**Documentation:**
+- `mobile/MOBILE_SETUP.md` - Setup & installation guide
+- `mobile/OPERATIONAL_ENHANCEMENTS.md` - Feature guide with examples
+- `mobile/README.md` - Full technical documentation
 
 ## Recent Implementation - Phase 3 Complete
 

@@ -38,6 +38,12 @@ export const api = {
     return res.json();
   },
 
+  async getJob(id: number) {
+    const res = await fetch(`${API_BASE}/api/jobs/${id}`);
+    if (!res.ok) throw new Error('Failed to fetch job');
+    return res.json();
+  },
+
   async createJob(data: any) {
     const res = await fetch(`${API_BASE}/api/jobs`, {
       method: 'POST',
@@ -45,6 +51,24 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Failed to create job');
+    return res.json();
+  },
+
+  async updateJob(id: number, data: any) {
+    const res = await fetch(`${API_BASE}/api/jobs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update job');
+    return res.json();
+  },
+
+  async deleteJob(id: number) {
+    const res = await fetch(`${API_BASE}/api/jobs/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete job');
     return res.json();
   },
 

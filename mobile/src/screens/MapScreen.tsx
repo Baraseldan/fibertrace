@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { colors } from '../theme/colors';
 import { calculateDistance } from '../lib/utils';
+import { JobFormModal } from './JobFormModal';
 
 const { width, height } = Dimensions.get('window');
 
@@ -29,6 +30,8 @@ export function MapScreen() {
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [gpsPath, setGpsPath] = useState<[number, number][]>([]);
   const [isTracking, setIsTracking] = useState(false);
+  const [selectedNodes, setSelectedNodes] = useState<Set<number>>(new Set());
+  const [showJobForm, setShowJobForm] = useState(false);
 
   // Fetch nodes from backend
   const { data: olts = [] } = useQuery({
@@ -118,6 +121,16 @@ export function MapScreen() {
     Closure: '#8b5cf6',
   };
 
+  const toggleNodeSelection = (nodeId: number) => {
+    const newSelected = new Set(selectedNodes);
+    if (newSelected.has(nodeId)) {
+      newSelected.delete(nodeId);
+    } else {
+      newSelected.add(nodeId);
+    }
+    setSelectedNodes(newSelected);
+  };
+
   return (
     <View style={styles.container}>
       {/* Map View */}
@@ -135,10 +148,13 @@ export function MapScreen() {
               latitude: node.latitude,
               longitude: node.longitude,
             }}
-            pinColor={nodeColors[node.type]}
+            pinColor={selectedNodes.has(node.id) ? colors.primary : nodeColors[node.type]}
             title={node.name}
             description={`${node.type} - Power: ${node.inputPower || 'N/A'}`}
-            onPress={() => setSelectedNode(node)}
+            onPress={() => {
+              setSelectedNode(node);
+              toggleNodeSelection(node.id);
+            }}
           />
         ))}
 
@@ -183,21 +199,53 @@ export function MapScreen() {
 
       {/* Control Buttons */}
       <View style={styles.controlPanel}>
-        <TouchableOpacity
-          style={[styles.button, { backgroundColor: colors.primary }]}
-          onPress={isTracking ? stopTracking : startTracking}
-        >
-          <Text style={styles.buttonText}>
-            {isTracking ? 'Stop GPS' : 'Start GPS'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: colors.primary, flex: 1 }]}
+            onPress={isTracking ? stopTracking : startTracking}
+          >
+            <Text style={styles.buttonText}>
+              {isTracking ? 'Stop GPS' : 'Start GPS'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.button,
+              {
+                backgroundColor: colors.accent,
+                flex: 1,
+                marginLeft: 8,
+                opacity: selectedNodes.size > 0 ? 1 : 0.5,
+              },
+            ]}
+            onPress={() => setShowJobForm(true)}
+            disabled={selectedNodes.size === 0 && gpsPath.length === 0}
+          >
+            <Text style={styles.buttonText}>
+              {selectedNodes.size > 0 ? `${selectedNodes.size} Nodes` : 'Create Job'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <Text style={styles.statsText}>
           {gpsPath.length > 0
-            ? `GPS Points: ${gpsPath.length}`
-            : 'No tracking data'}
+            ? `GPS Points: ${gpsPath.length} | Nodes: ${selectedNodes.size}`
+            : `Nodes: ${selectedNodes.size}`}
         </Text>
       </View>
+
+      {/* Job Form Modal */}
+      <JobFormModal
+        visible={showJobForm}
+        onClose={() => setShowJobForm(false)}
+        onSuccess={() => {
+          setSelectedNodes(new Set());
+          setGpsPath([]);
+        }}
+        gpsRoute={gpsPath}
+        selectedNodeIds={Array.from(selectedNodes)}
+      />
     </View>
   );
 }
@@ -244,11 +292,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  buttonRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
   button: {
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 8,
   },
   buttonText: {
     color: colors.primaryForeground,
