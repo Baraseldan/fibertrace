@@ -2,13 +2,71 @@
 
 ## Overview
 
-FiberTrace is a comprehensive web application designed for fiber optic technicians to manage jobs, track inventory, monitor equipment, and visualize fiber routes. Built with a modern tech stack, it provides both offline-first capabilities and real-time data synchronization for field technicians.
+FiberTrace is a comprehensive cross-platform application designed for fiber optic technicians to manage jobs, track inventory, monitor equipment, and visualize fiber routes. Built with a modern tech stack, it provides both offline-first capabilities and real-time data synchronization for field technicians.
+
+**Multi-Platform Architecture:**
+- **Web App**: React + Express (original version - `/client` and `/server`)
+- **Mobile App**: React Native + Expo (new iOS/Android version - `/mobile`)
 
 The application features a dark-themed UI with neon-blue accents, creating a technical aesthetic suitable for infrastructure management. It supports role-based access (Technician, Team Leader, Manager) and provides essential tools for day-to-day fiber optic installation and maintenance work.
+
+## Project Structure
+
+```
+.
+├── client/              # Web app (React + Vite)
+├── server/              # Backend API (Express + Node.js)
+├── shared/              # Shared types and schemas
+├── mobile/              # Mobile app (React Native + Expo)
+│   ├── src/
+│   │   ├── screens/     # Map, Jobs screens
+│   │   ├── lib/         # API client, utilities
+│   │   ├── theme/       # Colors and styling
+│   │   └── App.tsx      # Main app
+│   └── package.json
+└── server/              # Shared backend for web & mobile
+```
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+
+## Recent Implementation - Mobile App Conversion (November 25, 2025)
+
+### React Native Mobile App Created ✅
+
+**NEW `/mobile` directory with React Native + Expo:**
+- Interactive map with all fiber node types (OLT, Splitter, FAT, ATB, Closure)
+- Jobs management screen with status tracking
+- GPS tracking integration
+- Bottom tab navigation (Map / Jobs)
+- Dark theme with neon-blue accents (matches web design perfectly)
+- Connects to same Express backend API
+- Ready for iOS/Android deployment
+
+**Mobile App Structure:**
+```
+mobile/
+├── src/
+│   ├── screens/     # MapScreen.tsx, JobsScreen.tsx
+│   ├── lib/         # API client, utilities
+│   ├── theme/       # Color system matching web design
+│   └── App.tsx      # Tab navigation
+├── app.json         # Expo configuration
+├── package.json     # React Native dependencies
+└── README.md        # Full mobile documentation
+```
+
+**Quick Start:**
+```bash
+cd mobile
+npm install --legacy-peer-deps
+npm start           # Development server
+npm run ios         # iOS simulator
+npm run android     # Android emulator
+```
+
+**Full setup guide:** See `mobile/MOBILE_SETUP.md`
 
 ## Recent Implementation - Phase 3 Complete
 
