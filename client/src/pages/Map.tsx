@@ -241,35 +241,6 @@ export default function Map() {
   const [showPowerAnalysis, setShowPowerAnalysis] = useState(false);
   const [showRouteOptimization, setShowRouteOptimization] = useState(false);
 
-  // Collect all nodes for analysis
-  const allNodes = [
-    ...olts.map(n => ({ ...n, type: 'OLT', nodeId: `olt-${n.id}` })),
-    ...splitters.map(n => ({ ...n, type: 'Splitter', nodeId: `splitter-${n.id}` })),
-    ...fats.map(n => ({ ...n, type: 'FAT', nodeId: `fat-${n.id}` })),
-    ...atbs.map(n => ({ ...n, type: 'ATB', nodeId: `atb-${n.id}` })),
-    ...closures.map(n => ({ ...n, type: 'Closure', nodeId: `closure-${n.id}` })),
-  ];
-
-  // Filter nodes by search
-  const filteredNodes = filterNodesBySearch(
-    allNodes.map(n => ({
-      id: n.nodeId,
-      name: n.name,
-      type: n.type,
-      latitude: n.latitude || '0',
-      longitude: n.longitude || '0',
-      inputPower: n.inputPower,
-      location: n.location,
-      notes: n.notes,
-    })),
-    searchTerm,
-    filterType === 'All' ? undefined : filterType,
-    filterPower === 'All' ? undefined : filterPower
-  );
-
-  // Power analysis
-  const powerAnalysis = analyzePowerDistribution(allNodes);
-
   // Toggle node selection for bulk ops
   const toggleNodeSelection = (nodeId: string) => {
     const newSelected = new Set(selectedNodeIds);
@@ -281,7 +252,7 @@ export default function Map() {
     setSelectedNodeIds(newSelected);
   };
 
-  // Export selected nodes
+  // Export handlers
   const handleExportJSON = () => {
     if (selectedNodeIds.size === 0) {
       toast({ title: "No nodes selected", description: "Select nodes to export" });
@@ -447,6 +418,42 @@ export default function Map() {
   const { data: closures = [], isLoading: closuresLoading, error: closuresError } = useQuery<Closure[]>({
     queryKey: ['/api/closures'],
   });
+
+  // Collect all nodes for analysis (after queries are defined)
+  const allNodes = [
+    ...olts.map(n => ({ ...n, type: 'OLT', nodeId: `olt-${n.id}` })),
+    ...splitters.map(n => ({ ...n, type: 'Splitter', nodeId: `splitter-${n.id}` })),
+    ...fats.map(n => ({ ...n, type: 'FAT', nodeId: `fat-${n.id}` })),
+    ...atbs.map(n => ({ ...n, type: 'ATB', nodeId: `atb-${n.id}` })),
+    ...closures.map(n => ({ ...n, type: 'Closure', nodeId: `closure-${n.id}` })),
+  ];
+
+  // Filter nodes by search
+  const filteredNodes = filterNodesBySearch(
+    allNodes.map(n => ({
+      id: n.nodeId,
+      name: n.name,
+      type: n.type,
+      latitude: String(n.latitude || '0'),
+      longitude: String(n.longitude || '0'),
+      inputPower: String((n as any).inputPower || '0'),
+      location: String(n.location || ''),
+      notes: String(n.notes || ''),
+    })),
+    searchTerm,
+    filterType === 'All' ? undefined : filterType,
+    filterPower === 'All' ? undefined : filterPower
+  );
+
+  // Power analysis
+  const powerAnalysis = analyzePowerDistribution(
+    allNodes.map(n => ({
+      id: String(n.id || n.nodeId),
+      name: n.name,
+      type: n.type,
+      inputPower: String((n as any).inputPower || '0'),
+    }))
+  );
 
   const saveGPSRouteMutation = useMutation({
     mutationFn: async (waypoints: [number, number][]) => {
