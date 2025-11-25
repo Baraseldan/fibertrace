@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Layers, Navigation, Play, Pause, Save, AlertCircle, Activity, Zap, X, Edit, Link2, FileText, ChevronLeft, Menu } from "lucide-react";
+import { Plus, Layers, Navigation, Play, Pause, Save, AlertCircle, Activity, Zap, X, Edit, Link2, FileText, ChevronLeft, Menu, Download, Wifi, WifiOff, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { jobsApi, gpsRoutesApi, authApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { getPowerStatus } from "@/lib/powerUtils";
+import { registerServiceWorker, downloadTilesForRegion, getOnlineStatus, onOnlineStatusChange, clearOfflineCache, getStorageInfo, formatBytes } from "@/lib/offlineMap";
 import L from 'leaflet';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -158,6 +159,74 @@ export default function Map() {
 
   // Sidebar visibility state
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Offline map state
+  const [isOnline, setIsOnline] = useState(getOnlineStatus());
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [storageInfo, setStorageInfo] = useState<{ usage: number; quota: number; percentage: number } | null>(null);
+  const [showOfflinePanel, setShowOfflinePanel] = useState(false);
+
+  // Initialize service worker and offline detection
+  useEffect(() => {
+    registerServiceWorker();
+    getStorageInfo().then(setStorageInfo);
+
+    const unsubscribe = onOnlineStatusChange((online) => {
+      setIsOnline(online);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Download tiles for current map view
+  const handleDownloadTiles = async () => {
+    const mapElement = document.querySelector('.leaflet-container');
+    if (!mapElement) {
+      toast({ title: "Error", description: "Map not loaded yet" });
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      // Get map bounds or use default area (roughly 5x5km)
+      const bounds = {
+        north: 40.7128 + 0.05, // Default: NYC area
+        south: 40.7128 - 0.05,
+        east: -74.0060 + 0.05,
+        west: -74.0060 - 0.05,
+      };
+
+      const success = await downloadTilesForRegion(bounds, [13, 14, 15]);
+      if (success) {
+        toast({
+          title: "Tiles Downloaded",
+          description: "Map tiles cached for offline use",
+        });
+        const info = await getStorageInfo();
+        setStorageInfo(info);
+      } else {
+        toast({
+          title: "Download Failed",
+          description: "Could not cache map tiles",
+        });
+      }
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  // Clear offline cache
+  const handleClearCache = async () => {
+    const success = await clearOfflineCache();
+    if (success) {
+      toast({
+        title: "Cache Cleared",
+        description: "Offline map data has been removed",
+      });
+      const info = await getStorageInfo();
+      setStorageInfo(info);
+    }
+  };
 
   // Selected node state for details panel
   const [selectedNode, setSelectedNode] = useState<{
@@ -570,6 +639,66 @@ export default function Map() {
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
+          </div>
+
+          {/* Offline Map Section */}
+          <div className="p-3 border-b border-border/50">
+            <Card className="bg-card/90 backdrop-blur-md border-border/50 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-bold text-sm flex items-center gap-1">
+                  {isOnline ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-orange-500" />}
+                  Offline Map
+                </h3>
+                <Badge variant={isOnline ? "default" : "outline"} className="text-xs">
+                  {isOnline ? "Online" : "Offline"}
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadTiles}
+                  disabled={isDownloading}
+                  className="w-full"
+                  data-testid="button-download-tiles"
+                >
+                  <Download className="h-3 w-3 mr-1" />
+                  {isDownloading ? "Downloading..." : "Download Current Area"}
+                </Button>
+
+                {storageInfo && (
+                  <div className="text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Storage Used:</span>
+                      <span className="font-mono">{formatBytes(storageInfo.usage)}</span>
+                    </div>
+                    <div className="w-full bg-secondary rounded-full h-2">
+                      <div
+                        className="bg-primary rounded-full h-2 transition-all"
+                        style={{ width: `${Math.min(storageInfo.percentage, 100)}%` }}
+                      />
+                    </div>
+                    <div className="text-muted-foreground">
+                      {Math.round(storageInfo.percentage)}% of {formatBytes(storageInfo.quota)}
+                    </div>
+                  </div>
+                )}
+
+                {storageInfo && storageInfo.usage > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearCache}
+                    className="w-full text-destructive hover:text-destructive"
+                    data-testid="button-clear-cache"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Clear Cache
+                  </Button>
+                )}
+              </div>
+            </Card>
           </div>
 
           {/* GPS Tracking Section */}
