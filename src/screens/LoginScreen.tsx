@@ -21,28 +21,26 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     setLoading(true);
 
     try {
-      // TODO: Call backend API /api/auth/login
-      // const response = await offlineApi.login(email, password);
-      
-      // Mock login for now
-      if (email && password.length >= 6) {
+      // Simple validation: any email + password 6+ chars
+      if (email.includes('@') && password.length >= 6) {
         const mockUser = {
           email,
-          role: 'Technician',
+          role: 'Technician' as const,
           technicianId: `tech-${Date.now()}`,
         };
         
-        // Store in AsyncStorage
-        // await AsyncStorage.setItem('user', JSON.stringify(mockUser));
-        
-        onLoginSuccess?.(mockUser);
+        // Call success callback
+        setTimeout(() => {
+          onLoginSuccess?.(mockUser);
+          setLoading(false);
+        }, 500); // Small delay for visual feedback
       } else {
-        Alert.alert('Error', 'Invalid credentials');
+        setLoading(false);
+        Alert.alert('Invalid Credentials', 'Use any email (e.g., tech@example.com) and password with 6+ characters');
       }
     } catch (error) {
-      Alert.alert('Error', 'Login failed');
-    } finally {
       setLoading(false);
+      Alert.alert('Error', 'Login failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 

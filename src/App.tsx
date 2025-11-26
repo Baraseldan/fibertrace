@@ -76,10 +76,15 @@ function AppContent() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleLoginSuccess = async (user: AuthStorage.User) => {
-    await AuthStorage.saveUser(user);
-    setIsLoggedIn(true);
-  };
+  const handleLoginSuccess = React.useCallback(async (user: AuthStorage.User) => {
+    try {
+      await AuthStorage.saveUser(user);
+      // Ensure state updates after save completes
+      setIsLoggedIn(true);
+    } catch (error) {
+      console.error('Failed to save user:', error);
+    }
+  }, []);
 
   const handleLogout = async () => {
     await AuthStorage.clearUser();
