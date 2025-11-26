@@ -357,3 +357,120 @@ app.listen(PORT, () => {
   console.log(`🔌 Database: PostgreSQL (${process.env.DATABASE_URL ? 'connected' : 'local default'})`);
   console.log(`📊 API Endpoints Ready - PostgreSQL Integration Active`);
 });
+
+// ============ OTP & EMAIL VERIFICATION ENDPOINTS ============
+app.post('/api/auth/request-otp', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    
+    // Check if email already exists
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiryTime = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    // Store OTP in database
+    await pool.query(
+      'INSERT INTO otp_codes (email, code, expires_at) VALUES ($1, $2, $3)',
+      [email, otp, expiryTime]
+    );
+
+    // Send email via Gmail (requires Gmail App Password in env)
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_ADDRESS,
+        pass: process.env.GMAIL_APP_PASSWORD,
+      },
+    });
+
+    await transporter.sendMail({
+      from: process.env.GMAIL_ADDRESS,
+      to: email,
+      subject: 'FiberTrace - Email Verification Code',
+      html: `<h2>Email Verification</h2><p>Your OTP code is: <strong>${otp}</strong></p><p>Valid for 5 minutes</p>`,
+    });
+
+    res.json({ success: true, message: 'OTP sent to email' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/verify-otp', async (req: Request, res: Response) => {
+  try {
+    const { email, code } = req.body;
+
+    const result = await pool.query(
+      'SELECT * FROM otp_codes WHERE email = $1 AND code = $2 AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1',
+      [email, code]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid or expired OTP' });
+    }
+
+    // Mark OTP as used
+    await pool.query('UPDATE otp_codes SET used = true WHERE id = $1', [result.rows[0].id]);
+
+    res.json({ success: true, message: 'Email verified', verified: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ ADMIN EMAIL CONFIGURATION ============
+app.post('/api/admin/email-config', async (req: Request, res: Response) => {
+  try {
+    const { role } = req.user || {}; // Verify JWT token
+    if (role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { gmailAppPassword, adminEmail, otpExpiry, emailVerificationEnabled, singleEmailUse } = req.body;
+
+    // In production, encrypt and store these securely
+    const config = {
+      gmailAppPassword,
+      adminEmail,
+      otpExpiry,
+      emailVerificationEnabled,
+      singleEmailUse,
+      updatedAt: new Date(),
+    };
+
+    // Store in database or environment
+    await pool.query(
+      'INSERT INTO admin_config (key, value) VALUES ($1, $2) ON CONFLICT(key) DO UPDATE SET value = $2',
+      ['email_config', JSON.stringify(config)]
+    );
+
+    res.json({ success: true, message: 'Email configuration updated' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/email-config', async (req: Request, res: Response) => {
+  try {
+    const { role } = req.user || {};
+    if (role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const result = await pool.query('SELECT value FROM admin_config WHERE key = $1', ['email_config']);
+
+    if (result.rows.length === 0) {
+      return res.json({ config: null });
+    }
+
+    res.json({ config: JSON.parse(result.rows[0].value) });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});

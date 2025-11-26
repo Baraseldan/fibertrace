@@ -37,7 +37,7 @@ export default function LoginScreen({ onLoginSuccess, onSwitchToRegister, onSwit
             const data = await response.json();
             const user = {
               email: data.user.email,
-              role: (data.user.role || 'Technician') as const,
+              role: data.user.role || 'Technician',
               technicianId: `tech-${data.user.id || Date.now()}`,
             };
             onLoginSuccess?.(user);
@@ -127,9 +127,14 @@ export default function LoginScreen({ onLoginSuccess, onSwitchToRegister, onSwit
           </View>
 
           <View style={styles.featureList}>
-            <FeatureItem title="🔐 Secure Auth" description="Technician account with role-based access" />
-            <FeatureItem title="📱 Offline First" description="Work without internet connection" />
-            <FeatureItem title="🔄 Auto Sync" description="Sync when connection returns" />
+            <FeatureItem title="🌐 Secure Auth" description="Email-verified accounts with role-based access" />
+            <FeatureItem title="📱 Offline First" description="Work completely without internet" />
+            <FeatureItem title="🔄 Auto Sync" description="Seamless sync when online" />
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.mottoText}>🌐 Connecting Infrastructure • Bridging Networks • Empowering Operations</Text>
+            <Text style={styles.copyrightText}>© 2024 FiberTrace • Data Integrity & Security First</Text>
           </View>
         </ScrollView>
       </View>
@@ -170,4 +175,7 @@ const styles = StyleSheet.create({
   featureItem: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(0, 255, 255, 0.2)' },
   featureTitle: { fontSize: 13, fontWeight: '600', color: '#00ffff' },
   featureDescription: { fontSize: 12, color: colors.mutedForeground, marginTop: 2 },
+  footer: { alignItems: 'center', paddingVertical: 20, marginTop: 20, borderTopWidth: 1, borderTopColor: 'rgba(0, 255, 255, 0.2)' },
+  mottoText: { fontSize: 12, color: '#00ffff', fontWeight: '600', marginBottom: 4 },
+  copyrightText: { fontSize: 11, color: colors.mutedForeground },
 });
