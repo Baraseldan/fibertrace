@@ -140,7 +140,7 @@ function SpliceMapItem({ spliceMap, onDelete }: any) {
       <View style={styles.fiberVisualization}>
         <Text style={styles.vizTitle}>Fiber Status:</Text>
         <View style={styles.fiberList}>
-          {spliceMap.fiberMappings.slice(0, 5).map((mapping, idx) => (
+          {spliceMap.fiberMappings.slice(0, 5).map((mapping: any, idx: number) => (
             <View key={idx} style={styles.fiberEntry}>
               <View
                 style={[

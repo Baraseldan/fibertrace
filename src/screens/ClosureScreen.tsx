@@ -65,7 +65,7 @@ export function ClosureScreen() {
               <View style={styles.statsGrid}>
                 <StatItem label="Total Closures" value={stats.totalClosures} color={colors.primary} />
                 <StatItem label="Active" value={stats.activeClosures} color={colors.chart.green} />
-                <StatItem label="Total Splices" value={stats.totalSplices} color={colors.chart.blue} />
+                <StatItem label="Total Splices" value={stats.totalSplices} color={colors.primary} />
                 <StatItem label="High Loss" value={stats.closuresWithHighLoss} color={colors.destructive} />
               </View>
 
