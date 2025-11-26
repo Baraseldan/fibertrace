@@ -1,55 +1,95 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  Modal,
-} from 'react-native';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { offlineApi } from '../lib/offlineApiAdapter';
+import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, TextInput } from 'react-native';
 import { colors } from '../theme/colors';
-import { updateJobStatus } from '../lib/jobManager';
+import * as JobManagement from '@/lib/jobManagement';
 
 interface JobDetailsScreenProps {
-  jobId: number;
-  onClose: () => void;
+  jobId?: string;
+  onBack?: () => void;
+  onComplete?: () => void;
 }
 
-export function JobDetailsScreen({ jobId, onClose }: JobDetailsScreenProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedNotes, setEditedNotes] = useState('');
+export default function JobDetailsScreen({ jobId, onBack, onComplete }: JobDetailsScreenProps) {
+  const [job, setJob] = useState<JobManagement.Job | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notes, setNotes] = useState('');
 
-  const { data: job, isLoading } = useQuery({
-    queryKey: ['/api/jobs', jobId],
-    queryFn: () => offlineApi.getJob(jobId),
-  });
+  React.useEffect(() => {
+    if (jobId) {
+      loadJob();
+    }
+  }, [jobId]);
 
-  const statusMutation = useMutation({
-    mutationFn: (status: string) => updateJobStatus(jobId, status as any),
-    onSuccess: () => {
-      Alert.alert('Success', 'Job status updated');
-    },
-  });
-
-  const handleStatusChange = (newStatus: string) => {
-    Alert.alert(
-      'Update Status',
-      `Change status to ${newStatus}?`,
-      [
-        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
-        { text: 'Confirm', onPress: () => statusMutation.mutate(newStatus) },
-      ]
-    );
+  const loadJob = async () => {
+    try {
+      setLoading(true);
+      // TODO: Fetch from backend via offlineApi
+      const mockJob: JobManagement.Job = {
+        id: jobId || 'job-1',
+        jobId: 'JOB-001',
+        name: 'Fiber Installation - Main Street',
+        description: 'Install fiber optic cable from OLT to residential area',
+        status: 'Pending',
+        priority: 'High',
+        assignedTechnician: 'tech@example.com',
+        nodeIds: ['node-1', 'node-2'],
+        routeIds: ['route-1'],
+        scheduledDate: new Date().toISOString(),
+        scheduledTime: '10:00',
+        duration: 0,
+        estimatedDuration: 7200,
+        materialRequired: [{ itemId: 'cable-001', quantity: 500 }],
+        estimatedCost: 500,
+        notes: '',
+        inlineNotes: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        unsyncedChanges: false,
+      };
+      setJob(mockJob);
+      setNotes(mockJob.notes);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load job');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (isLoading) {
+  const handleStatusChange = (newStatus: JobManagement.JobStatus) => {
+    if (job) {
+      const updated = JobManagement.updateJobStatus(job, newStatus);
+      setJob(updated);
+    }
+  };
+
+  const handleAddNote = () => {
+    if (job && notes.trim()) {
+      const updated = JobManagement.addInlineNote(job, notes, 'Current User');
+      setJob(updated);
+      setNotes('');
+      Alert.alert('Success', 'Note added');
+    }
+  };
+
+  const handleCompleteJob = () => {
+    if (job) {
+      const completionData: JobManagement.CompletionData = {
+        durationSeconds: job.duration || 0,
+        actualCost: job.actualCost || job.estimatedCost,
+        notes: job.notes,
+        signedBy: 'Current User',
+      };
+      const completed = JobManagement.completeJob(job, completionData);
+      setJob(completed);
+      Alert.alert('Success', 'Job marked as completed');
+      onComplete?.();
+    }
+  };
+
+  if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading job details...</Text>
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
@@ -62,266 +102,124 @@ export function JobDetailsScreen({ jobId, onClose }: JobDetailsScreenProps) {
     );
   }
 
-  const statusColor = {
+  const statusColors: Record<JobManagement.JobStatus, string> = {
+    'In Progress': colors.chart.green,
     'Pending': colors.chart.amber,
-    'In Progress': colors.chart.cyan,
-    'Completed': colors.chart.green,
-  }[job.status] || colors.muted;
+    'Completed': colors.mutedForeground,
+    'On Hold': colors.destructive,
+    'Cancelled': colors.destructive,
+  };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header */}
+    <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.jobType}>{job.type}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-          <Text style={styles.statusText}>{job.status}</Text>
-        </View>
+        <TouchableOpacity onPress={onBack}>
+          <Text style={styles.backButton}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>{job.name}</Text>
       </View>
 
-      {/* Job Information */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Job Information</Text>
-
-        <View style={styles.infoRow}>
-          <Text style={styles.label}>Address</Text>
-          <Text style={styles.value}>{job.address}</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Text style={styles.label}>Scheduled Date</Text>
-          <Text style={styles.value}>
-            {new Date(job.scheduledDate).toLocaleDateString()}
-          </Text>
-        </View>
-
-        {job.completedDate && (
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Completed Date</Text>
-            <Text style={styles.value}>
-              {new Date(job.completedDate).toLocaleDateString()}
-            </Text>
+        <View style={styles.statusRow}>
+          <View>
+            <Text style={styles.label}>ID</Text>
+            <Text style={styles.value}>{job.jobId}</Text>
           </View>
-        )}
+          <View style={[styles.statusBadge, { backgroundColor: statusColors[job.status] }]}>
+            <Text style={styles.statusText}>{job.status}</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Materials */}
-      {(job.cableUsed || job.materialsUsed) && (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Details</Text>
+        <DetailRow label="Description" value={job.description} />
+        <DetailRow label="Scheduled" value={new Date(job.scheduledDate).toLocaleDateString()} />
+        <DetailRow label="Est. Duration" value={`${(job.estimatedDuration / 3600).toFixed(1)}h`} />
+        <DetailRow label="Est. Cost" value={`$${job.estimatedCost}`} />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Notes</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Add note..."
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+          numberOfLines={3}
+        />
+        <TouchableOpacity style={styles.button} onPress={handleAddNote}>
+          <Text style={styles.buttonText}>Add Note</Text>
+        </TouchableOpacity>
+      </View>
+
+      {job.inlineNotes.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Materials</Text>
-          {job.cableUsed && (
-            <View style={styles.infoRow}>
-              <Text style={styles.label}>Cable Used</Text>
-              <Text style={styles.value}>{job.cableUsed} m</Text>
+          <Text style={styles.sectionTitle}>Timeline</Text>
+          {job.inlineNotes.map(note => (
+            <View key={note.id} style={styles.noteItem}>
+              <Text style={styles.noteAuthor}>{note.author}</Text>
+              <Text style={styles.noteText}>{note.text}</Text>
             </View>
+          ))}
+        </View>
+      )}
+
+      {job.status !== 'Completed' && (
+        <View style={styles.actionsContainer}>
+          {job.status === 'Pending' && (
+            <TouchableOpacity style={styles.primaryButton} onPress={() => handleStatusChange('In Progress')}>
+              <Text style={styles.buttonText}>Start Job</Text>
+            </TouchableOpacity>
           )}
-          {job.materialsUsed && (
-            <View style={styles.infoRow}>
-              <Text style={styles.label}>Other Materials</Text>
-              <Text style={styles.value}>{job.materialsUsed}</Text>
-            </View>
+          {job.status === 'In Progress' && (
+            <TouchableOpacity style={styles.successButton} onPress={handleCompleteJob}>
+              <Text style={styles.buttonText}>Complete Job</Text>
+            </TouchableOpacity>
           )}
         </View>
       )}
 
-      {/* Notes */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Notes</Text>
-        {isEditing ? (
-          <TextInput
-            style={styles.notesInput}
-            value={editedNotes}
-            onChangeText={setEditedNotes}
-            placeholder="Add notes..."
-            placeholderTextColor={colors.mutedForeground}
-            multiline
-          />
-        ) : (
-          <Text style={styles.notes}>{job.notes || 'No notes'}</Text>
-        )}
-        <TouchableOpacity
-          style={[styles.button, { backgroundColor: colors.primary }]}
-          onPress={() => {
-            if (isEditing) {
-              setEditedNotes('');
-            }
-            setIsEditing(!isEditing);
-          }}
-        >
-          <Text style={styles.buttonText}>
-            {isEditing ? 'Done Editing' : 'Edit Notes'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Status Management */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Update Status</Text>
-        <View style={styles.statusButtonsRow}>
-          <TouchableOpacity
-            style={[
-              styles.statusButton,
-              job.status === 'In Progress' && styles.statusButtonActive,
-              { borderColor: colors.chart.cyan },
-            ]}
-            onPress={() => handleStatusChange('In Progress')}
-            disabled={statusMutation.isPending}
-          >
-            <Text
-              style={[
-                styles.statusButtonText,
-                job.status === 'In Progress' && { color: colors.primaryForeground },
-              ]}
-            >
-              Start
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.statusButton,
-              job.status === 'Completed' && styles.statusButtonActive,
-              { borderColor: colors.chart.green },
-            ]}
-            onPress={() => handleStatusChange('Completed')}
-            disabled={statusMutation.isPending}
-          >
-            <Text
-              style={[
-                styles.statusButtonText,
-                job.status === 'Completed' && { color: colors.primaryForeground },
-              ]}
-            >
-              Complete
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Close Button */}
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: colors.accent }]}
-        onPress={onClose}
-      >
-        <Text style={styles.buttonText}>Close</Text>
-      </TouchableOpacity>
+      <View style={styles.spacer} />
     </ScrollView>
   );
 }
 
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: 16,
-  },
-  loadingText: {
-    color: colors.mutedForeground,
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  errorText: {
-    color: colors.destructive,
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  jobType: {
-    color: colors.primary,
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  section: {
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sectionTitle: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  infoRow: {
-    marginBottom: 10,
-  },
-  label: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  value: {
-    color: colors.foreground,
-    fontSize: 14,
-  },
-  notes: {
-    color: colors.foreground,
-    fontSize: 14,
-    marginBottom: 10,
-  },
-  notesInput: {
-    backgroundColor: colors.background,
-    color: colors.foreground,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 10,
-    minHeight: 80,
-  },
-  statusButtonsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 10,
-  },
-  statusButton: {
-    flex: 1,
-    borderWidth: 2,
-    borderRadius: 6,
-    padding: 10,
-    alignItems: 'center',
-  },
-  statusButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  statusButtonText: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  button: {
-    padding: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  buttonText: {
-    color: colors.primaryForeground,
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  header: { padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  backButton: { fontSize: 14, color: colors.primary, fontWeight: '600', marginBottom: 8 },
+  title: { fontSize: 18, fontWeight: 'bold', color: colors.foreground },
+  section: { padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  sectionTitle: { fontSize: 14, fontWeight: '600', color: colors.foreground, marginBottom: 12 },
+  statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 4 },
+  statusText: { fontSize: 12, fontWeight: '600', color: colors.background },
+  label: { fontSize: 12, color: colors.mutedForeground },
+  value: { fontSize: 14, fontWeight: '600', color: colors.foreground, marginTop: 4 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  detailLabel: { fontSize: 13, color: colors.mutedForeground },
+  detailValue: { fontSize: 13, fontWeight: '600', color: colors.foreground },
+  input: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 6, padding: 10, color: colors.foreground, minHeight: 80, textAlignVertical: 'top', marginBottom: 8 },
+  button: { backgroundColor: colors.primary, paddingVertical: 10, borderRadius: 6, alignItems: 'center', marginBottom: 8 },
+  buttonText: { fontSize: 14, fontWeight: '600', color: colors.background },
+  noteItem: { backgroundColor: colors.card, padding: 10, borderRadius: 6, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: colors.primary },
+  noteAuthor: { fontSize: 12, fontWeight: '600', color: colors.primary },
+  noteText: { fontSize: 13, color: colors.foreground, marginTop: 4 },
+  actionsContainer: { padding: 16, gap: 8 },
+  primaryButton: { backgroundColor: colors.primary, paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
+  successButton: { backgroundColor: colors.chart.green, paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
+  spacer: { height: 20 },
+  loadingText: { fontSize: 14, color: colors.mutedForeground, textAlign: 'center', marginTop: 40 },
+  errorText: { fontSize: 14, color: colors.destructive, textAlign: 'center', marginTop: 40 },
 });
