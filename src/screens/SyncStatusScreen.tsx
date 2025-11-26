@@ -1,31 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
 import { colors } from '../theme/colors';
+import * as OfflineStorage from '../lib/offlineStorage';
 
 export default function SyncStatusScreen() {
   const [syncing, setSyncing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [lastSync, setLastSync] = useState<Date | null>(new Date(Date.now() - 300000));
-  const [pendingItems, setPendingItems] = useState(3);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [pendingItems, setPendingItems] = useState(0);
+  const [isOnline, setIsOnline] = useState(true);
+
+  const loadSyncStatus = async () => {
+    try {
+      const status = await OfflineStorage.getSyncStatus();
+      setIsOnline(status.isOnline);
+      setPendingItems(status.unsynced);
+      setLastSync(status.lastSync);
+    } catch (error) {
+      console.error('Failed to load sync status:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadSyncStatus();
+    const interval = setInterval(loadSyncStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    setSyncing(true);
-    setTimeout(() => {
-      setLastSync(new Date());
-      setPendingItems(0);
-      setSyncing(false);
-      setRefreshing(false);
-    }, 1500);
+    await loadSyncStatus();
+    setRefreshing(false);
   };
 
-  const handleManualSync = () => {
+  const handleManualSync = async () => {
     setSyncing(true);
-    setTimeout(() => {
+    try {
+      // Simulate sync - in production would call actual API
+      await new Promise(resolve => setTimeout(resolve, 1500));
       setLastSync(new Date());
-      setPendingItems(0);
+      await loadSyncStatus();
+    } finally {
       setSyncing(false);
-    }, 1500);
+    }
   };
 
   const formatTime = (date: Date) => {
@@ -42,11 +59,20 @@ export default function SyncStatusScreen() {
 
   return (
     <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
+      {/* Connection Status */}
+      <View style={[styles.statusCard, { borderColor: isOnline ? colors.chart.green : colors.chart.amber }]}>
+        <View style={styles.statusHeader}>
+          <View style={[styles.statusDot, { backgroundColor: isOnline ? colors.chart.green : colors.chart.amber }]} />
+          <Text style={styles.statusTitle}>{isOnline ? 'Connected' : 'Offline Mode'}</Text>
+        </View>
+        <Text style={styles.statusTime}>Server: {isOnline ? '✓ Online' : '✗ Offline'}</Text>
+      </View>
+
       {/* Sync Status Card */}
       <View style={[styles.statusCard, syncing && { borderColor: colors.chart.green }]}>
         <View style={styles.statusHeader}>
           <View style={[styles.statusDot, syncing && styles.statusDotActive]} />
-          <Text style={styles.statusTitle}>{syncing ? 'Syncing...' : 'All Synced'}</Text>
+          <Text style={styles.statusTitle}>{syncing ? 'Syncing...' : pendingItems === 0 ? 'All Synced' : `${pendingItems} Pending`}</Text>
         </View>
         {lastSync && (
           <Text style={styles.statusTime}>Last sync: {formatTime(lastSync)} ({getTimeDiff(lastSync)})</Text>

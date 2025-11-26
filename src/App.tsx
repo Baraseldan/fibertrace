@@ -39,11 +39,28 @@ const queryClient = new QueryClient({
 function AppContent() {
   const [activeTab, setActiveTab] = React.useState('Dashboard');
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [isSyncing, setIsSyncing] = React.useState(false);
+  const [syncStatus, setSyncStatus] = React.useState<{ isOnline: boolean; unsynced: number }>({ isOnline: true, unsynced: 0 });
 
   useEffect(() => {
     initializeOfflineStorage().catch(error => {
       console.error('Failed to initialize offline storage:', error);
     });
+
+    // Check sync status periodically
+    const checkSync = async () => {
+      try {
+        const { getSyncStatus } = await import('./lib/offlineStorage');
+        const status = await getSyncStatus();
+        setSyncStatus({ isOnline: true, unsynced: status.unsynced });
+      } catch {
+        setSyncStatus({ isOnline: false, unsynced: 0 });
+      }
+    };
+
+    checkSync();
+    const interval = setInterval(checkSync, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const screens: Record<string, React.ComponentType<any>> = {
@@ -116,6 +133,20 @@ function AppContent() {
           }}>
             {activeTab}
           </Text>
+
+          {/* Sync Status Indicator */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
+            <View style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: syncStatus.isOnline ? colors.chart.green : colors.chart.amber,
+              marginRight: 4,
+            }} />
+            <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
+              {syncStatus.unsynced > 0 ? `${syncStatus.unsynced}⬆` : '✓'}
+            </Text>
+          </View>
 
           {/* App Title/Logo */}
           <Text style={{

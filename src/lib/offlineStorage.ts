@@ -233,6 +233,114 @@ export async function markJobAsSynced(jobId: number): Promise<void> {
   }
 }
 
+// ============ CLOSURE STORAGE ============
+export async function getStoredClosures(): Promise<any[]> {
+  try {
+    const data = await AsyncStorage.getItem('fibertrace_closures');
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Failed to get closures:', error);
+    return [];
+  }
+}
+
+export async function saveClosure(closure: any): Promise<void> {
+  try {
+    const closures = await getStoredClosures();
+    const idx = closures.findIndex(c => c.id === closure.id);
+    if (idx !== -1) {
+      closures[idx] = closure;
+    } else {
+      closures.push(closure);
+    }
+    await AsyncStorage.setItem('fibertrace_closures', JSON.stringify(closures));
+  } catch (error) {
+    console.error('Failed to save closure:', error);
+  }
+}
+
+// ============ CUSTOMER STORAGE ============
+export async function getStoredCustomers(): Promise<any[]> {
+  try {
+    const data = await AsyncStorage.getItem('fibertrace_customers');
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Failed to get customers:', error);
+    return [];
+  }
+}
+
+export async function saveCustomer(customer: any): Promise<void> {
+  try {
+    const customers = await getStoredCustomers();
+    const idx = customers.findIndex(c => c.id === customer.id);
+    if (idx !== -1) {
+      customers[idx] = customer;
+    } else {
+      customers.push(customer);
+    }
+    await AsyncStorage.setItem('fibertrace_customers', JSON.stringify(customers));
+  } catch (error) {
+    console.error('Failed to save customer:', error);
+  }
+}
+
+// ============ SPLICE STORAGE ============
+export async function getStoredSplices(): Promise<any[]> {
+  try {
+    const data = await AsyncStorage.getItem('fibertrace_splices');
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Failed to get splices:', error);
+    return [];
+  }
+}
+
+export async function saveSplice(splice: any): Promise<void> {
+  try {
+    const splices = await getStoredSplices();
+    const idx = splices.findIndex(s => s.id === splice.id);
+    if (idx !== -1) {
+      splices[idx] = splice;
+    } else {
+      splices.push(splice);
+    }
+    await AsyncStorage.setItem('fibertrace_splices', JSON.stringify(splices));
+  } catch (error) {
+    console.error('Failed to save splice:', error);
+  }
+}
+
+// ============ SYNC STATUS ============
+export async function getSyncStatus(): Promise<{
+  isOnline: boolean;
+  lastSync: Date | null;
+  unsynced: number;
+}> {
+  try {
+    const lastSync = await getLastSyncTime();
+    const jobs = await getUnsyncedJobs();
+    const nodes = await getStoredNodes();
+    const routes = await getStoredRoutes();
+    const closures = await getStoredClosures();
+    const customers = await getStoredCustomers();
+    const splices = await getStoredSplices();
+
+    const unsyncedCount = 
+      jobs.filter(j => !j.synced).length +
+      nodes.filter(n => !n.synced).length +
+      routes.filter(r => !r.synced).length +
+      closures.filter(c => !c.synced).length +
+      customers.filter(c => !c.synced).length +
+      splices.filter(s => !s.synced).length;
+
+    return { isOnline: true, lastSync, unsynced: unsyncedCount };
+  } catch (error) {
+    console.error('Failed to get sync status:', error);
+    return { isOnline: false, lastSync: null, unsynced: 0 };
+  }
+}
+
 // Clear all offline data
 export async function clearOfflineData(): Promise<void> {
   try {
@@ -240,6 +348,9 @@ export async function clearOfflineData(): Promise<void> {
       'fibertrace_jobs',
       'fibertrace_nodes',
       'fibertrace_routes',
+      'fibertrace_closures',
+      'fibertrace_customers',
+      'fibertrace_splices',
       'fibertrace_last_sync',
     ]);
   } catch (error) {
