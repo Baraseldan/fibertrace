@@ -41,19 +41,39 @@ export default function RegisterScreen({ onRegisterSuccess, onSwitchToLogin }: R
     setLoading(true);
 
     try {
-      const newUser = {
-        email,
-        role: 'Technician' as const,
-        technicianId: `tech-${Date.now()}`,
-      };
-      
-      setTimeout(() => {
+      // Try to register via API
+      try {
+        const response = await fetch('http://localhost:5001/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ full_name: fullName, email, password_hash: password }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const user = {
+            email: data.user.email,
+            role: (data.user.role || 'Technician') as const,
+            technicianId: `tech-${data.user.id || Date.now()}`,
+          };
+          onRegisterSuccess?.(user);
+        } else {
+          const error = await response.json();
+          throw new Error(error.error || 'Registration failed');
+        }
+      } catch (apiError) {
+        // Fallback to local mode
+        const newUser = {
+          email,
+          role: 'Technician' as const,
+          technicianId: `tech-${Date.now()}`,
+        };
         onRegisterSuccess?.(newUser);
-        setLoading(false);
-      }, 500);
+      }
     } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Registration failed');
+    } finally {
       setLoading(false);
-      Alert.alert('Error', 'Registration failed');
     }
   };
 

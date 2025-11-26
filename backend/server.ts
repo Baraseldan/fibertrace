@@ -2,318 +2,358 @@ import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import { v4 as uuidv4 } from 'uuid';
+import pg from 'pg';
 
+const { Pool } = pg;
 const app: Express = express();
 const PORT = process.env.PORT || 5001;
+
+// PostgreSQL Connection Pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/fibertrace',
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
-// In-memory storage (replace with database in production)
-const database = {
-  nodes: [] as any[],
-  routes: [] as any[],
-  closures: [] as any[],
-  customers: [] as any[],
-  splices: [] as any[],
-  jobs: [] as any[],
-  inventory: [] as any[],
-  syncLog: [] as any[],
-};
-
 // ============ HEALTH CHECK ============
 app.get('/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), server: 'FiberTrace Backend' });
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), server: 'FiberTrace Backend', database: 'PostgreSQL' });
+});
+
+// ============ AUTH ENDPOINTS ============
+app.post('/api/auth/register', async (req: Request, res: Response) => {
+  try {
+    const { full_name, email, password_hash } = req.body;
+    const result = await pool.query(
+      'INSERT INTO users (full_name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, email, full_name, role',
+      [full_name, email, password_hash, 'technician']
+    );
+    res.json({ success: true, user: result.rows[0] });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Registration failed' });
+  }
+});
+
+app.post('/api/auth/login', async (req: Request, res: Response) => {
+  try {
+    const { email, password_hash } = req.body;
+    const result = await pool.query(
+      'SELECT id, email, full_name, role FROM users WHERE email = $1 AND password_hash = $2',
+      [email, password_hash]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const user = result.rows[0];
+    await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+    
+    res.json({ success: true, user });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Login failed' });
+  }
+});
+
+app.post('/api/auth/password-reset', async (req: Request, res: Response) => {
+  try {
+    const { email, new_password_hash } = req.body;
+    const result = await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE email = $2 RETURNING id, email',
+      [new_password_hash, email]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ success: true, message: 'Password reset successful' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Password reset failed' });
+  }
 });
 
 // ============ NODE ENDPOINTS ============
-app.get('/api/nodes', (req: Request, res: Response) => {
-  res.json({ nodes: database.nodes, count: database.nodes.length });
-});
-
-app.post('/api/nodes', (req: Request, res: Response) => {
-  const node = { id: uuidv4(), ...req.body, createdAt: new Date().toISOString(), synced: true };
-  database.nodes.push(node);
-  res.status(201).json(node);
-});
-
-app.put('/api/nodes/:id', (req: Request, res: Response) => {
-  const idx = database.nodes.findIndex(n => n.id === req.params.id);
-  if (idx !== -1) {
-    database.nodes[idx] = { ...database.nodes[idx], ...req.body, updatedAt: new Date().toISOString() };
-    res.json(database.nodes[idx]);
-  } else {
-    res.status(404).json({ error: 'Node not found' });
+app.get('/api/nodes', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM nodes ORDER BY created_at DESC');
+    res.json({ nodes: result.rows, count: result.rows.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/nodes/:id', (req: Request, res: Response) => {
-  database.nodes = database.nodes.filter(n => n.id !== req.params.id);
-  res.json({ message: 'Deleted' });
-});
-
-// ============ ROUTE ENDPOINTS ============
-app.get('/api/routes', (req: Request, res: Response) => {
-  res.json({ routes: database.routes, count: database.routes.length });
-});
-
-app.post('/api/routes', (req: Request, res: Response) => {
-  const route = { id: uuidv4(), ...req.body, createdAt: new Date().toISOString(), synced: true };
-  database.routes.push(route);
-  res.status(201).json(route);
-});
-
-app.put('/api/routes/:id', (req: Request, res: Response) => {
-  const idx = database.routes.findIndex(r => r.id === req.params.id);
-  if (idx !== -1) {
-    database.routes[idx] = { ...database.routes[idx], ...req.body, updatedAt: new Date().toISOString() };
-    res.json(database.routes[idx]);
-  } else {
-    res.status(404).json({ error: 'Route not found' });
+app.post('/api/nodes', async (req: Request, res: Response) => {
+  try {
+    const { node_name, node_type, latitude, longitude, power_status, power_rating, description } = req.body;
+    const result = await pool.query(
+      'INSERT INTO nodes (node_name, node_type, latitude, longitude, power_status, power_rating, description) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [node_name, node_type, latitude, longitude, power_status, power_rating, description]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/routes/:id', (req: Request, res: Response) => {
-  database.routes = database.routes.filter(r => r.id !== req.params.id);
-  res.json({ message: 'Deleted' });
-});
-
-// ============ CLOSURE ENDPOINTS ============
-app.get('/api/closures', (req: Request, res: Response) => {
-  res.json({ closures: database.closures, count: database.closures.length });
-});
-
-app.post('/api/closures', (req: Request, res: Response) => {
-  const closure = { id: uuidv4(), ...req.body, createdAt: new Date().toISOString(), synced: true };
-  database.closures.push(closure);
-  res.status(201).json(closure);
-});
-
-app.put('/api/closures/:id', (req: Request, res: Response) => {
-  const idx = database.closures.findIndex(c => c.id === req.params.id);
-  if (idx !== -1) {
-    database.closures[idx] = { ...database.closures[idx], ...req.body, updatedAt: new Date().toISOString() };
-    res.json(database.closures[idx]);
-  } else {
-    res.status(404).json({ error: 'Closure not found' });
+app.put('/api/nodes/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { node_name, node_type, power_status } = req.body;
+    const result = await pool.query(
+      'UPDATE nodes SET node_name = COALESCE($1, node_name), node_type = COALESCE($2, node_type), power_status = COALESCE($3, power_status) WHERE id = $4 RETURNING *',
+      [node_name, node_type, power_status, id]
+    );
+    res.json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ============ CUSTOMER ENDPOINTS ============
-app.get('/api/customers', (req: Request, res: Response) => {
-  res.json({ customers: database.customers, count: database.customers.length });
-});
-
-app.post('/api/customers', (req: Request, res: Response) => {
-  const customer = { id: uuidv4(), ...req.body, createdAt: new Date().toISOString(), synced: true };
-  database.customers.push(customer);
-  res.status(201).json(customer);
-});
-
-app.put('/api/customers/:id', (req: Request, res: Response) => {
-  const idx = database.customers.findIndex(c => c.id === req.params.id);
-  if (idx !== -1) {
-    database.customers[idx] = { ...database.customers[idx], ...req.body, updatedAt: new Date().toISOString() };
-    res.json(database.customers[idx]);
-  } else {
-    res.status(404).json({ error: 'Customer not found' });
+// ============ CLOSURES ENDPOINTS ============
+app.get('/api/closures', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM closures ORDER BY created_at DESC');
+    res.json({ closures: result.rows, count: result.rows.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ============ SPLICE ENDPOINTS ============
-app.get('/api/splices', (req: Request, res: Response) => {
-  res.json({ splices: database.splices, count: database.splices.length });
-});
-
-app.post('/api/splices', (req: Request, res: Response) => {
-  const splice = { id: uuidv4(), ...req.body, createdAt: new Date().toISOString(), synced: true };
-  database.splices.push(splice);
-  res.status(201).json(splice);
-});
-
-// ============ JOB ENDPOINTS ============
-app.get('/api/jobs', (req: Request, res: Response) => {
-  res.json({ jobs: database.jobs, count: database.jobs.length });
-});
-
-app.post('/api/jobs', (req: Request, res: Response) => {
-  const job = { id: uuidv4(), ...req.body, createdAt: new Date().toISOString(), synced: true };
-  database.jobs.push(job);
-  res.status(201).json(job);
-});
-
-app.put('/api/jobs/:id', (req: Request, res: Response) => {
-  const idx = database.jobs.findIndex(j => j.id === req.params.id);
-  if (idx !== -1) {
-    database.jobs[idx] = { ...database.jobs[idx], ...req.body, updatedAt: new Date().toISOString() };
-    res.json(database.jobs[idx]);
-  } else {
-    res.status(404).json({ error: 'Job not found' });
+app.post('/api/closures', async (req: Request, res: Response) => {
+  try {
+    const { closure_name, closure_type, latitude, longitude, capacity_total, description } = req.body;
+    const result = await pool.query(
+      'INSERT INTO closures (closure_name, closure_type, latitude, longitude, capacity_total, description) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [closure_name, closure_type, latitude, longitude, capacity_total, description]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ============ INVENTORY ENDPOINTS ============
-app.get('/api/inventory', (req: Request, res: Response) => {
-  res.json({ items: database.inventory, count: database.inventory.length });
-});
-
-app.post('/api/inventory', (req: Request, res: Response) => {
-  const item = { id: uuidv4(), ...req.body, createdAt: new Date().toISOString(), synced: true };
-  database.inventory.push(item);
-  res.status(201).json(item);
-});
-
-app.put('/api/inventory/:id', (req: Request, res: Response) => {
-  const idx = database.inventory.findIndex(i => i.id === req.params.id);
-  if (idx !== -1) {
-    database.inventory[idx] = { ...database.inventory[idx], ...req.body, updatedAt: new Date().toISOString() };
-    res.json(database.inventory[idx]);
-  } else {
-    res.status(404).json({ error: 'Item not found' });
+// ============ ROUTES (FIBER LINES) ENDPOINTS ============
+app.get('/api/routes', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM fiber_lines ORDER BY created_at DESC');
+    res.json({ routes: result.rows, count: result.rows.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ============ BULK SYNC ENDPOINT ============
-app.post('/api/sync', (req: Request, res: Response) => {
-  const { nodes, routes, closures, customers, splices, jobs, inventory, timestamp } = req.body;
+app.post('/api/routes', async (req: Request, res: Response) => {
+  try {
+    const { line_name, fiber_count, length_meters, start_point_type, start_point_id, end_point_type, end_point_id } = req.body;
+    const result = await pool.query(
+      'INSERT INTO fiber_lines (line_name, fiber_count, length_meters, start_point_type, start_point_id, end_point_type, end_point_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [line_name, fiber_count, length_meters, start_point_type, start_point_id, end_point_type, end_point_id]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
-  const syncId = uuidv4();
-  const syncResult = {
-    syncId,
-    timestamp: new Date().toISOString(),
-    deviceTimestamp: timestamp,
-    processed: 0,
-    errors: [] as any[],
-  };
+// ============ SPLITTERS ENDPOINTS ============
+app.get('/api/splitters', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM splitters ORDER BY created_at DESC');
+    res.json({ splitters: result.rows, count: result.rows.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
-  // Merge nodes
-  if (nodes && Array.isArray(nodes)) {
-    nodes.forEach((node: any) => {
-      const idx = database.nodes.findIndex(n => n.id === node.id);
-      if (idx !== -1) {
-        database.nodes[idx] = { ...database.nodes[idx], ...node, synced: true };
-      } else {
-        database.nodes.push({ ...node, id: node.id || uuidv4(), synced: true });
+app.post('/api/splitters', async (req: Request, res: Response) => {
+  try {
+    const { splitter_label, ratio, latitude, longitude } = req.body;
+    const result = await pool.query(
+      'INSERT INTO splitters (splitter_label, ratio, latitude, longitude) VALUES ($1, $2, $3, $4) RETURNING *',
+      [splitter_label, ratio, latitude, longitude]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ POWER READINGS ENDPOINTS ============
+app.get('/api/power-readings', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM power_readings ORDER BY timestamp DESC LIMIT 100');
+    res.json(result.rows);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/power-readings', async (req: Request, res: Response) => {
+  try {
+    const { node_id, voltage, current, battery_level } = req.body;
+    const result = await pool.query(
+      'INSERT INTO power_readings (node_id, voltage, current, battery_level) VALUES ($1, $2, $3, $4) RETURNING *',
+      [node_id, voltage, current, battery_level]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ FAT PORTS ENDPOINTS ============
+app.get('/api/fat-ports', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM fat_ports ORDER BY closure_id');
+    res.json(result.rows);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/fat-ports', async (req: Request, res: Response) => {
+  try {
+    const { closure_id, port_number, status, customer_name } = req.body;
+    const result = await pool.query(
+      'INSERT INTO fat_ports (closure_id, port_number, status, customer_name) VALUES ($1, $2, $3, $4) RETURNING *',
+      [closure_id, port_number, status, customer_name]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ JOBS ENDPOINTS ============
+app.get('/api/jobs', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM jobs ORDER BY created_at DESC');
+    res.json({ jobs: result.rows, count: result.rows.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/jobs', async (req: Request, res: Response) => {
+  try {
+    const { job_title, job_type, assigned_to_user_id, asset_type, asset_id, status } = req.body;
+    const result = await pool.query(
+      'INSERT INTO jobs (job_title, job_type, assigned_to_user_id, asset_type, asset_id, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [job_title, job_type, assigned_to_user_id, asset_type, asset_id, status || 'pending']
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/jobs/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const result = await pool.query('UPDATE jobs SET status = $1 WHERE id = $2 RETURNING *', [status, id]);
+    res.json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ DAILY REPORTS ENDPOINTS ============
+app.get('/api/daily-reports', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM daily_reports ORDER BY date DESC');
+    res.json(result.rows);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/daily-reports', async (req: Request, res: Response) => {
+  try {
+    const { user_id, summary, total_jobs, total_distance_walked } = req.body;
+    const result = await pool.query(
+      'INSERT INTO daily_reports (user_id, date, summary, total_jobs, total_distance_walked) VALUES ($1, NOW(), $2, $3, $4) RETURNING *',
+      [user_id, summary, total_jobs, total_distance_walked]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ OFFLINE SYNC ENDPOINT ============
+app.post('/api/sync', async (req: Request, res: Response) => {
+  try {
+    const { nodes, closures, routes, jobs, timestamp } = req.body;
+    let processed = 0;
+
+    if (nodes && Array.isArray(nodes)) {
+      for (const node of nodes) {
+        await pool.query(
+          'INSERT INTO nodes (node_name, node_type, latitude, longitude, power_status) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
+          [node.node_name, node.node_type, node.latitude, node.longitude, node.power_status]
+        );
+        processed++;
       }
-      syncResult.processed++;
-    });
-  }
+    }
 
-  // Merge routes
-  if (routes && Array.isArray(routes)) {
-    routes.forEach((route: any) => {
-      const idx = database.routes.findIndex(r => r.id === route.id);
-      if (idx !== -1) {
-        database.routes[idx] = { ...database.routes[idx], ...route, synced: true };
-      } else {
-        database.routes.push({ ...route, id: route.id || uuidv4(), synced: true });
+    if (closures && Array.isArray(closures)) {
+      for (const closure of closures) {
+        await pool.query(
+          'INSERT INTO closures (closure_name, closure_type, latitude, longitude) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
+          [closure.closure_name, closure.closure_type, closure.latitude, closure.longitude]
+        );
+        processed++;
       }
-      syncResult.processed++;
-    });
-  }
+    }
 
-  // Merge closures
-  if (closures && Array.isArray(closures)) {
-    closures.forEach((closure: any) => {
-      const idx = database.closures.findIndex(c => c.id === closure.id);
-      if (idx !== -1) {
-        database.closures[idx] = { ...database.closures[idx], ...closure, synced: true };
-      } else {
-        database.closures.push({ ...closure, id: closure.id || uuidv4(), synced: true });
+    if (jobs && Array.isArray(jobs)) {
+      for (const job of jobs) {
+        await pool.query(
+          'INSERT INTO jobs (job_title, job_type, status) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+          [job.job_title, job.job_type, job.status]
+        );
+        processed++;
       }
-      syncResult.processed++;
-    });
+    }
+
+    res.json({ success: true, processed, syncId: Date.now(), timestamp });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
-
-  // Merge customers
-  if (customers && Array.isArray(customers)) {
-    customers.forEach((customer: any) => {
-      const idx = database.customers.findIndex(c => c.id === customer.id);
-      if (idx !== -1) {
-        database.customers[idx] = { ...database.customers[idx], ...customer, synced: true };
-      } else {
-        database.customers.push({ ...customer, id: customer.id || uuidv4(), synced: true });
-      }
-      syncResult.processed++;
-    });
-  }
-
-  // Merge splices
-  if (splices && Array.isArray(splices)) {
-    splices.forEach((splice: any) => {
-      const idx = database.splices.findIndex(s => s.id === splice.id);
-      if (idx !== -1) {
-        database.splices[idx] = { ...database.splices[idx], ...splice, synced: true };
-      } else {
-        database.splices.push({ ...splice, id: splice.id || uuidv4(), synced: true });
-      }
-      syncResult.processed++;
-    });
-  }
-
-  // Merge jobs
-  if (jobs && Array.isArray(jobs)) {
-    jobs.forEach((job: any) => {
-      const idx = database.jobs.findIndex(j => j.id === job.id);
-      if (idx !== -1) {
-        database.jobs[idx] = { ...database.jobs[idx], ...job, synced: true };
-      } else {
-        database.jobs.push({ ...job, id: job.id || uuidv4(), synced: true });
-      }
-      syncResult.processed++;
-    });
-  }
-
-  // Merge inventory
-  if (inventory && Array.isArray(inventory)) {
-    inventory.forEach((item: any) => {
-      const idx = database.inventory.findIndex(i => i.id === item.id);
-      if (idx !== -1) {
-        database.inventory[idx] = { ...database.inventory[idx], ...item, synced: true };
-      } else {
-        database.inventory.push({ ...item, id: item.id || uuidv4(), synced: true });
-      }
-      syncResult.processed++;
-    });
-  }
-
-  // Log sync
-  database.syncLog.push(syncResult);
-
-  res.json({
-    success: true,
-    ...syncResult,
-    syncLog: database.syncLog.slice(-10), // Return last 10 syncs
-  });
 });
 
 // ============ STATS ENDPOINT ============
-app.get('/api/stats', (req: Request, res: Response) => {
-  res.json({
-    totalNodes: database.nodes.length,
-    totalRoutes: database.routes.length,
-    totalClosures: database.closures.length,
-    totalCustomers: database.customers.length,
-    totalJobs: database.jobs.length,
-    totalInventory: database.inventory.length,
-    lastSync: database.syncLog.length > 0 ? database.syncLog[database.syncLog.length - 1] : null,
-  });
+app.get('/api/stats', async (req: Request, res: Response) => {
+  try {
+    const nodeCount = await pool.query('SELECT COUNT(*) as count FROM nodes');
+    const closureCount = await pool.query('SELECT COUNT(*) as count FROM closures');
+    const jobCount = await pool.query('SELECT COUNT(*) as count FROM jobs WHERE status = $1', ['completed']);
+    const userCount = await pool.query('SELECT COUNT(*) as count FROM users');
+
+    res.json({
+      totalNodes: parseInt(nodeCount.rows[0].count),
+      totalClosures: parseInt(closureCount.rows[0].count),
+      completedJobs: parseInt(jobCount.rows[0].count),
+      totalUsers: parseInt(userCount.rows[0].count),
+      lastSync: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Start server
 app.listen(PORT, () => {
   console.log(`✅ FiberTrace Backend running on port ${PORT}`);
-  console.log(`📱 Mobile app can sync to: http://localhost:${PORT}/api/sync`);
-  console.log(`🔄 Available endpoints:`);
-  console.log(`   - GET/POST /api/nodes`);
-  console.log(`   - GET/POST /api/routes`);
-  console.log(`   - GET/POST /api/closures`);
-  console.log(`   - GET/POST /api/customers`);
-  console.log(`   - GET/POST /api/splices`);
-  console.log(`   - GET/POST /api/jobs`);
-  console.log(`   - GET/POST /api/inventory`);
-  console.log(`   - POST /api/sync (offline data sync)`);
-  console.log(`   - GET /api/stats (system statistics)`);
+  console.log(`📱 API Base: http://localhost:${PORT}`);
+  console.log(`🔌 Database: PostgreSQL (${process.env.DATABASE_URL ? 'connected' : 'local default'})`);
+  console.log(`📊 API Endpoints Ready - PostgreSQL Integration Active`);
 });

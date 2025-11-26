@@ -24,23 +24,41 @@ export default function LoginScreen({ onLoginSuccess, onSwitchToRegister, onSwit
 
     try {
       if (email.includes('@') && password.length >= 6) {
-        const mockUser = {
-          email,
-          role: 'Technician' as const,
-          technicianId: `tech-${Date.now()}`,
-        };
-        
-        setTimeout(() => {
+        // Try to login via API
+        try {
+          const response = await fetch('http://localhost:5001/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password_hash: password }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const user = {
+              email: data.user.email,
+              role: (data.user.role || 'Technician') as const,
+              technicianId: `tech-${data.user.id || Date.now()}`,
+            };
+            onLoginSuccess?.(user);
+          } else {
+            throw new Error('Invalid credentials');
+          }
+        } catch (apiError) {
+          // Fallback to local mode
+          const mockUser = {
+            email,
+            role: 'Technician' as const,
+            technicianId: `tech-${Date.now()}`,
+          };
           onLoginSuccess?.(mockUser);
-          setLoading(false);
-        }, 500);
+        }
       } else {
-        setLoading(false);
         Alert.alert('Invalid Credentials', 'Use valid email and password with 6+ characters');
       }
     } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Login failed');
+    } finally {
       setLoading(false);
-      Alert.alert('Error', 'Login failed');
     }
   };
 

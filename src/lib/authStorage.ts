@@ -1,20 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface User {
+  id?: number;
   email: string;
   role: 'Technician' | 'TeamLead' | 'Manager';
-  technicianId: string;
-}
-
-export interface AuthAccount {
-  email: string;
-  password: string; // In production, use hashed passwords
-  fullName: string;
-  createdAt: string;
+  technicianId?: string;
+  full_name?: string;
 }
 
 const AUTH_KEY = 'fibertrace_user';
-const ACCOUNTS_KEY = 'fibertrace_accounts';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
 
 // Save user session
 export async function saveUser(user: User): Promise<void> {
@@ -51,70 +46,82 @@ export async function isLoggedIn(): Promise<boolean> {
   return !!user;
 }
 
-// Register new account
-export async function registerAccount(fullName: string, email: string, password: string): Promise<AuthAccount> {
+// Register new account via API
+export async function registerAccount(fullName: string, email: string, password: string): Promise<User> {
   try {
-    const accounts = await getAccounts();
-    const exists = accounts.find(a => a.email === email);
-    
-    if (exists) {
-      throw new Error('Email already registered');
+    const response = await fetch(`${API_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ full_name: fullName, email, password_hash: password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Registration failed');
     }
 
-    const newAccount: AuthAccount = {
-      email,
-      password,
-      fullName,
-      createdAt: new Date().toISOString(),
-    };
-
-    accounts.push(newAccount);
-    await AsyncStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
-    return newAccount;
+    const data = await response.json();
+    return data.user;
   } catch (error) {
     console.error('Registration failed:', error);
     throw error;
   }
 }
 
-// Verify login credentials
-export async function verifyCredentials(email: string, password: string): Promise<AuthAccount | null> {
+// Verify login credentials via API
+export async function verifyCredentials(email: string, password: string): Promise<User | null> {
   try {
-    const accounts = await getAccounts();
-    const account = accounts.find(a => a.email === email && a.password === password);
-    return account || null;
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password_hash: password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Login failed');
+    }
+
+    const data = await response.json();
+    return data.user || null;
   } catch (error) {
     console.error('Verification failed:', error);
     return null;
   }
 }
 
-// Get all accounts (for demo)
-export async function getAccounts(): Promise<AuthAccount[]> {
-  try {
-    const data = await AsyncStorage.getItem(ACCOUNTS_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (error) {
-    console.error('Failed to get accounts:', error);
-    return [];
-  }
-}
-
-// Reset password
+// Reset password via API
 export async function resetPassword(email: string, newPassword: string): Promise<boolean> {
   try {
-    const accounts = await getAccounts();
-    const account = accounts.find(a => a.email === email);
-    
-    if (!account) {
-      throw new Error('Account not found');
+    const response = await fetch(`${API_URL}/auth/password-reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, new_password_hash: newPassword }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Password reset failed');
     }
 
-    account.password = newPassword;
-    await AsyncStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
     return true;
   } catch (error) {
     console.error('Password reset failed:', error);
     return false;
+  }
+}
+
+// Fallback: Local verification (for offline mode)
+export async function verifyCredentialsLocally(email: string, password: string): Promise<User | null> {
+  try {
+    const user = await getStoredUser();
+    if (user && user.email === email) {
+      // In real app, verify hashed password
+      return user;
+    }
+    return null;
+  } catch (error) {
+    console.error('Local verification failed:', error);
+    return null;
   }
 }
