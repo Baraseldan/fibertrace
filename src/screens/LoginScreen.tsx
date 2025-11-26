@@ -68,15 +68,15 @@ export default function LoginScreen({ onLoginSuccess, onSwitchToRegister, onSwit
         <ScrollView contentContainerStyle={styles.container}>
           <View style={styles.logoContainer}>
             <Text style={styles.logo}>FiberTrace</Text>
-            <Text style={styles.tagline}>Technician Portal</Text>
+            <Text style={styles.tagline}>Fiber Optic Network Management</Text>
           </View>
 
           <View style={styles.formContainer}>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>Email Address</Text>
               <TextInput
                 style={styles.input}
-                placeholder="technician@company.com"
+                placeholder="your@email.com"
                 placeholderTextColor={colors.mutedForeground}
                 value={email}
                 onChangeText={setEmail}
