@@ -16,12 +16,12 @@ import { api } from '../lib/api';
 import { colors } from '../theme/colors';
 import * as MapModule from '../lib/mapModule';
 
-// Stub components for web - ignore TS errors for mobile-only components
-const MapView = ({ style }: any): JSX.Element => (
+// Stub components for web - mobile-only components with proper typing
+const MapView: React.FC<any> = ({ style }: any) => (
   <View style={[style, { backgroundColor: colors.background }]} />
 );
-const Marker = (): null => null;
-const Polyline = (): null => null;
+const Marker: React.FC<any> = () => null;
+const Polyline: React.FC<any> = () => null;
 const PROVIDER_GOOGLE = null;
 
 const { width, height } = Dimensions.get('window');
