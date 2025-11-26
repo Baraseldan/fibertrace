@@ -1,5 +1,5 @@
 // MAP MODULE - Complete Fiber Optic Network Management
-// Exports all 10 workflows for offline-first, professional map functionality
+// Exports all 10 workflows + Offline GPS for offline-first, professional map functionality
 
 export * from './types';
 
@@ -32,3 +32,6 @@ export * from './cloudSync';
 
 // Workflow 10: Offline First
 export * from './offlineFirst';
+
+// Bonus: Offline GPS Mapping
+export * from './offlineGPS';

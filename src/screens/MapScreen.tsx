@@ -10,20 +10,18 @@ import {
   Platform,
   Modal,
   TextInput,
-  FlatList,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { colors } from '../theme/colors';
 import * as MapModule from '../lib/mapModule';
-import { calculateHaversineDistance } from '../lib/utils';
 
-// Stub components for web
-const MapView = ({ style }: any) => (
+// Stub components for web - ignore TS errors for mobile-only components
+const MapView = ({ style }: any): JSX.Element => (
   <View style={[style, { backgroundColor: colors.background }]} />
 );
-const Marker = () => null;
-const Polyline = () => null;
+const Marker = (): null => null;
+const Polyline = (): null => null;
 const PROVIDER_GOOGLE = null;
 
 const { width, height } = Dimensions.get('window');
@@ -68,6 +66,10 @@ export function MapScreen() {
       const initialRegion = await MapModule.loadMapInitialState();
       setRegion(initialRegion);
       setCurrentLocation({ latitude: initialRegion.latitude, longitude: initialRegion.longitude });
+      
+      // Load offline GPS status
+      const status = await MapModule.getOfflineMapStatus();
+      setOfflineMapStatus(status);
     })();
   }, []);
 
@@ -102,7 +104,6 @@ export function MapScreen() {
   const [showNodePanel, setShowNodePanel] = useState(false);
 
   const handleMapPress = (location: MapModule.GeoPoint) => {
-    if (!currentLocation) return;
     const node = MapModule.detectNodeAtLocation(allNodes, location, 0.05);
     if (node) {
       setSelectedNode(node);
@@ -110,13 +111,15 @@ export function MapScreen() {
     }
   };
 
-  // ===== WORKFLOW 4: INFRASTRUCTURE MANAGEMENT =====
+  // ===== WORKFLOW 4: INFRASTRUCTURE MANAGEMENT + OFFLINE GPS =====
   const [showAddNodeModal, setShowAddNodeModal] = useState(false);
   const [newNodeName, setNewNodeName] = useState('');
   const [newNodeType, setNewNodeType] = useState<'OLT' | 'Splitter' | 'FAT' | 'ATB' | 'DomeClosure'>('FAT');
   const [isTracking, setIsTracking] = useState(false);
   const [gpsPath, setGpsPath] = useState<MapModule.GeoPoint[]>([]);
   const [trackedDistance, setTrackedDistance] = useState(0);
+  const [offlineMapStatus, setOfflineMapStatus] = useState<any>(null);
+  const [showOfflineSettings, setShowOfflineSettings] = useState(false);
 
   const handleAddNode = async () => {
     if (!currentLocation || !newNodeName) {
@@ -166,7 +169,10 @@ export function MapScreen() {
       setFiberLines([...fiberLines, newLine]);
       await MapModule.saveFiberLines([...fiberLines, newLine]);
 
-      Alert.alert('GPS Trace Complete', `Distance: ${distance.toFixed(3)} km`);
+      // Cache the route for offline access
+      await MapModule.cacheOfflineRoute(`Route-${Date.now()}`, gpsPath);
+
+      Alert.alert('GPS Trace Complete', `Distance: ${distance.toFixed(3)} km\nRoute cached for offline`);
     }
   };
 
@@ -289,17 +295,21 @@ export function MapScreen() {
         region={region}
         onRegionChange={setRegion}
       >
-        {allNodes.map((node) => (
-          <Marker
-            key={node.id}
-            coordinate={{ latitude: node.latitude, longitude: node.longitude }}
-            pinColor={nodeColors[node.type] || colors.primary}
-            title={node.name}
-            onPress={() => handleMapPress({ latitude: node.latitude, longitude: node.longitude })}
-          />
-        ))}
+        {allNodes.map((node) => {
+          // @ts-ignore - Mobile-only component
+          return (
+            <Marker
+              key={node.id}
+              coordinate={{ latitude: node.latitude, longitude: node.longitude }}
+              pinColor={nodeColors[node.type] || colors.primary}
+              title={node.name}
+              onPress={() => handleMapPress({ latitude: node.latitude, longitude: node.longitude })}
+            />
+          );
+        })}
 
         {currentLocation && (
+          // @ts-ignore - Mobile-only component
           <Marker
             coordinate={{ latitude: currentLocation.latitude, longitude: currentLocation.longitude }}
             pinColor={colors.primary}
@@ -308,6 +318,7 @@ export function MapScreen() {
         )}
 
         {gpsPath.length > 1 && (
+          // @ts-ignore - Mobile-only component
           <Polyline
             coordinates={gpsPath}
             strokeColor={colors.primary}
@@ -369,11 +380,23 @@ export function MapScreen() {
           >
             <Text style={styles.buttonText}>Sync</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: colors.primary, flex: 1, marginLeft: 8 }]}
+            onPress={() => setShowOfflineSettings(true)}
+          >
+            <Text style={styles.buttonText}>Cache</Text>
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.statsText}>
-          Nodes: {allNodes.length} | Lines: {fiberLines.length} | Pending: {pendingActions} | Status: {syncStatus}
+          Nodes: {allNodes.length} | Lines: {fiberLines.length} | Pending: {pendingActions}
         </Text>
+        {offlineMapStatus && (
+          <Text style={styles.statsText}>
+            Tiles: {offlineMapStatus.cachedTiles} | Routes: {offlineMapStatus.cachedRoutes} | Size: {offlineMapStatus.totalCacheSize}
+          </Text>
+        )}
       </View>
 
       {/* ADD NODE MODAL */}
@@ -472,6 +495,55 @@ export function MapScreen() {
                 <Text style={styles.buttonText}>Cancel</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* OFFLINE MAP CACHE SETTINGS */}
+      <Modal visible={showOfflineSettings} transparent animationType="slide">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Offline Map Cache</Text>
+
+            {offlineMapStatus && (
+              <View style={styles.statusBox}>
+                <Text style={styles.statusText}>📍 Tiles: {offlineMapStatus.cachedTiles}</Text>
+                <Text style={styles.statusText}>🗺️ Routes: {offlineMapStatus.cachedRoutes}</Text>
+                <Text style={styles.statusText}>📊 GPS Points: {offlineMapStatus.gpsHistoryPoints}</Text>
+                <Text style={styles.statusText}>💾 Size: {offlineMapStatus.totalCacheSize}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.settingBtn, { backgroundColor: colors.primary, marginBottom: 8 }]}
+              onPress={async () => {
+                const tilesCached = await MapModule.cacheMapTilesForRegion(region, 15);
+                const status = await MapModule.getOfflineMapStatus();
+                setOfflineMapStatus(status);
+                Alert.alert('Cache Updated', `${tilesCached} tiles cached for offline`);
+              }}
+            >
+              <Text style={styles.buttonText}>Cache Current Region</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.settingBtn, { backgroundColor: colors.accent, marginBottom: 8 }]}
+              onPress={async () => {
+                await MapModule.clearOfflineMapCache();
+                const status = await MapModule.getOfflineMapStatus();
+                setOfflineMapStatus(status);
+                Alert.alert('Cache Cleared', 'All offline maps cleared');
+              }}
+            >
+              <Text style={styles.buttonText}>Clear Cache</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.settingBtn, { backgroundColor: colors.mutedForeground }]}
+              onPress={() => setShowOfflineSettings(false)}
+            >
+              <Text style={styles.buttonText}>Close</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -627,5 +699,24 @@ const styles = StyleSheet.create({
   listItemText: {
     color: colors.foreground,
     fontSize: 14,
+  },
+  statusBox: {
+    backgroundColor: colors.background,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  statusText: {
+    color: colors.foreground,
+    fontSize: 13,
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  settingBtn: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
   },
 });
