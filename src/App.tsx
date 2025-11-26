@@ -35,6 +35,7 @@ const queryClient = new QueryClient({
 
 function AppContent() {
   const [activeTab, setActiveTab] = React.useState('Dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
 
   useEffect(() => {
     initializeOfflineStorage().catch(error => {
@@ -63,34 +64,67 @@ function AppContent() {
   };
 
   const ActiveScreen = screens[activeTab];
-
   const tabs = Object.keys(screens);
-  const tabsPerPage = 5;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.background }}>
       <QueryClientProvider client={queryClient}>
-        {ActiveScreen && <ActiveScreen />}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border }}>
-          {tabs.map(tab => (
-            <TouchableOpacity
-              key={tab}
-              onPress={() => setActiveTab(tab)}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                alignItems: 'center',
-                backgroundColor: activeTab === tab ? colors.primary : 'transparent',
-                borderBottomWidth: activeTab === tab ? 3 : 0,
-                borderBottomColor: colors.primary,
-              }}
-            >
-              <Text style={{ fontSize: 11, color: activeTab === tab ? colors.background : colors.mutedForeground, fontWeight: '600' }}>
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* Collapsible Sidebar */}
+        <View style={{
+          width: sidebarCollapsed ? 60 : 200,
+          backgroundColor: colors.card,
+          borderRightWidth: 1,
+          borderRightColor: colors.border,
+          transition: 'width 0.3s ease',
+        }}>
+          {/* Toggle Button */}
+          <TouchableOpacity
+            onPress={() => setSidebarCollapsed(!sidebarCollapsed)}
+            style={{
+              padding: 16,
+              backgroundColor: colors.primary,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+            }}
+          >
+            <Text style={{ fontSize: 18, color: colors.background, fontWeight: 'bold' }}>
+              {sidebarCollapsed ? '☰' : '✕'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Navigation Items */}
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {tabs.map(tab => (
+              <TouchableOpacity
+                key={tab}
+                onPress={() => setActiveTab(tab)}
+                style={{
+                  paddingVertical: 12,
+                  paddingHorizontal: sidebarCollapsed ? 8 : 16,
+                  backgroundColor: activeTab === tab ? colors.primary : 'transparent',
+                  borderLeftWidth: activeTab === tab ? 4 : 0,
+                  borderLeftColor: colors.primary,
+                  alignItems: sidebarCollapsed ? 'center' : 'flex-start',
+                }}
+              >
+                <Text style={{
+                  fontSize: sidebarCollapsed ? 10 : 14,
+                  color: activeTab === tab ? colors.background : colors.foreground,
+                  fontWeight: activeTab === tab ? 'bold' : 'normal',
+                }}>
+                  {sidebarCollapsed ? tab.slice(0, 2) : tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Main Content Area */}
+        <View style={{ flex: 1 }}>
+          {ActiveScreen && <ActiveScreen />}
+        </View>
       </QueryClientProvider>
     </View>
   );
