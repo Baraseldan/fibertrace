@@ -1,0 +1,281 @@
+Got you — here is a **pure workflow logic description for the MAP MODULE**, clearly structured, no coding mentions, no UI styling, just **functional system logic**.
+(This is suitable for project documentation, architecture reports, or feeding into an AI builder.)
+
+---
+
+# ⭐ **FULL WORKFLOW LOGIC DESCRIPTION — MAP MODULE**
+
+*For Offline Fiber Coverage, Node Management, Power-tracking & Field Deployment*
+
+---
+
+# **1. MAP LOADING WORKFLOW**
+
+### **1.1 Start**
+
+* User selects “Map View” from the main dashboard.
+* System loads **offline map tiles** stored on the device.
+* System checks:
+
+  * **GPS status**
+  * **Offline Map cache availability**
+  * **Saved fiber layers**
+
+### **1.2 Map Centering Logic**
+
+System decides map start position in this order:
+
+1. User’s GPS location (if enabled)
+2. Last viewed map coordinates
+3. Default project area
+
+---
+
+# **2. MAP DATA OVERLAY WORKFLOW**
+
+### **2.1 Load All Network Layers:**
+
+The system loads and overlays:
+
+* Fiber routes (feeder, distribution, drop lines)
+* All node types:
+
+  * OLT
+  * Splitters (1:2, 1:4, 1:8, 1:16, 1:32, 1:64)
+  * FATs
+  * ATBs
+  * Dome Closures
+  * Underground Closures
+  * Pedestal Cabinets
+  * Junctions
+  * Mini nodes
+  * DP boxes
+* Power level records
+* Job points
+* Issues or faults
+* Inventory deployment markers
+
+### **2.2 Layer Visibility Logic**
+
+User can toggle each layer using:
+
+* Checkboxes or switches
+* Filter panel (search, node type, power range, date updated)
+
+---
+
+# **3. MAP INTERACTION WORKFLOW**
+
+## **3.1 Touch / Tap Logic**
+
+When user taps a map object:
+
+* System detects object type
+* System retrieves object data
+* System displays a bottom panel with:
+
+  * Node ID
+  * Node type
+  * Coordinates
+  * Connected nodes
+  * Power In / Out
+  * Last update source (manual/Bluetooth splicer)
+  * Assigned technician
+  * Attachments (photos, notes)
+  * Quick actions (Edit / Link / Power / Report)
+
+If user taps empty map region → open quick-action menu.
+
+---
+
+# **4. ADDING NEW FIBER INFRASTRUCTURE**
+
+## **4.1 Adding a New Node**
+
+**Trigger:** Long-press on map
+System opens: **Node Creation Form**
+
+User selects:
+
+* Node Type
+* Node ID
+* Node category (Feeder/Distribution/Drop)
+* Power (optional)
+* Pictures
+* Description
+
+System saves node → places marker → updates layers.
+
+---
+
+## **4.2 Adding a New Fiber Line**
+
+**Workflow:**
+
+1. User taps **“Add Fiber Route”**
+
+2. System waits for **start point selection**
+
+3. User selects start node
+
+4. User selects end node
+
+5. System draws path
+
+6. System calculates:
+
+   * Straight-line distance
+   * Route distance (if manually drawn with multiple points)
+   * Cable length incl. slack (%)
+
+7. System links the fiber route to the two nodes.
+
+---
+
+## **4.3 GPS Trace Mapping (Walking Deployment)**
+
+**Workflow:**
+
+1. User starts **GPS Trace Mode**
+2. System captures movement points
+3. System draws live polyline
+4. User presses **“Stop”**
+5. System saves the traced fiber line
+6. Auto-calculates distance + slack
+
+---
+
+# **5. AUTO DISTANCE CALCULATION WORKFLOW**
+
+### **5.1 Point-to-Point Distance**
+
+1. User chooses Point A
+2. User chooses Point B
+3. System calculates:
+
+   * Straight-line distance
+   * Optional path distance (manual multi-point)
+
+### **5.2 Multi-Node Distance Chain**
+
+For chain:
+OLT → Splitter → FAT → ATB → Home
+System calculates:
+
+* Total fiber length
+* Individual segment lengths
+* Recommended cable
+
+---
+
+# **6. POWER MAPPING WORKFLOW**
+
+## **6.1 Manual Power Entry**
+
+1. User selects a node
+2. Clicks **“Power Update”**
+3. Inputs:
+
+   * Power IN
+   * Splitter type (if applicable)
+4. System auto-computes:
+
+   * Power loss
+   * Power OUT
+   * Updates downstream nodes
+
+---
+
+## **6.2 Bluetooth Power Update (From Splicer or OTDR)**
+
+**Trigger:** User selects “Update via Bluetooth”
+
+Workflow:
+
+1. System connects to splicer
+2. Fetches:
+
+   * Splice loss
+   * Fiber ID
+   * Measurement
+3. System updates:
+
+   * The specific node or closure
+   * Power in/out records
+   * Splice quality
+4. System logs action in daily report
+
+---
+
+# **7. NODE LINKING WORKFLOW**
+
+### **7.1 Linking Parent to Child Node**
+
+User opens a node → selects “Link Node”
+
+System prompts:
+
+* Select node to link
+* Select fiber line (optional)
+* Confirm link
+
+System auto:
+
+* Updates map topology
+* Updates power chain
+* Updates documentation
+
+---
+
+# **8. DAILY REPORTS WORKFLOW**
+
+Every action on the map triggers:
+
+* A report entry
+* A timestamp
+* GPS stamp
+* Node or line ID
+
+Reports include:
+
+* New nodes added
+* Power readings
+* Splice losses
+* Fiber routes drawn
+* Inventory used
+* Issues/faults encountered
+
+Export options:
+
+* PDF
+* CSV
+* Sync to central server
+
+---
+
+# **9. CLOUD SYNC WORKFLOW**
+
+When online:
+
+* System checks unsynced data
+* Uploads map changes:
+
+  * Nodes
+  * Fiber lines
+  * Power records
+  * Reports
+* Downloads new updates from server
+* Resolves conflicts using timestamps
+
+---
+
+# **10. OFFLINE FIRST PRIORITY LOGIC**
+
+If network unavailable:
+
+* All actions stored locally
+* Map continues functioning
+* Power calculations continue offline
+* Nodes and routes saved to local DB
+
+Sync occurs once online.
