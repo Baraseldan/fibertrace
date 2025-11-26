@@ -115,6 +115,11 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         <FeatureItem title="Auto Sync" description="Sync when connection returns" />
         <FeatureItem title="Role-Based" description="Technician, Lead, Manager access" />
       </View>
+
+      {/* Mobile App Indicator */}
+      <View style={styles.mobileIndicator}>
+        <Text style={styles.mobileIndicatorText}>MOBILE APP</Text>
+      </View>
     </View>
   );
 }
@@ -133,6 +138,8 @@ const styles = StyleSheet.create({
   logoContainer: { marginTop: 60, marginBottom: 40, alignItems: 'center' },
   logo: { fontSize: 32, fontWeight: 'bold', color: colors.primary },
   tagline: { fontSize: 14, color: colors.mutedForeground, marginTop: 4 },
+  mobileIndicator: { position: 'absolute', bottom: 12, right: 12, backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 4 },
+  mobileIndicatorText: { fontSize: 10, fontWeight: '600', color: colors.background, letterSpacing: 0.5 },
   formContainer: { marginBottom: 40 },
   inputGroup: { marginBottom: 16 },
   label: { fontSize: 13, color: colors.foreground, marginBottom: 6, fontWeight: '600' },

@@ -9,6 +9,9 @@ import JobListScreen from './screens/JobListScreen';
 import InventoryScreen from './screens/InventoryScreen';
 import ScheduleScreen from './screens/ScheduleScreen';
 import AnalyticsScreen from './screens/AnalyticsScreen';
+import SearchScreen from './screens/SearchScreen';
+import GPSTrackingScreen from './screens/GPSTrackingScreen';
+import ReportsScreen from './screens/ReportsScreen';
 import { colors } from './theme/colors';
 import { initializeOfflineStorage } from './lib/offlineStorage';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -42,6 +45,9 @@ function AppContent() {
     Inventory: InventoryScreen,
     Schedule: ScheduleScreen,
     Analytics: AnalyticsScreen,
+    Search: SearchScreen,
+    GPS: GPSTrackingScreen,
+    Reports: ReportsScreen,
   };
 
   const ActiveScreen = screens[activeTab];
