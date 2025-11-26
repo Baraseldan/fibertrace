@@ -8,6 +8,8 @@ export default function GPSTrackingScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [session, setSession] = useState<GPS.TrackingSession | null>(null);
+  const [metrics, setMetrics] = useState<GPS.TrackingMetrics | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
 
   const mockLocation: GPS.Location = {
     latitude: 40.7128,
@@ -16,13 +18,35 @@ export default function GPSTrackingScreen() {
     timestamp: new Date().toISOString(),
   };
 
+  React.useEffect(() => {
+    if (!tracking) return;
+    const interval = setInterval(() => {
+      setElapsedTime(t => t + 1);
+      if (session) {
+        // Simulate location update
+        const newLoc: GPS.Location = {
+          latitude: mockLocation.latitude + (Math.random() - 0.5) * 0.001,
+          longitude: mockLocation.longitude + (Math.random() - 0.5) * 0.001,
+          accuracy: 5,
+          timestamp: new Date().toISOString(),
+        };
+        const updatedSession = GPS.updateLocation(session, newLoc);
+        setSession(updatedSession);
+        setMetrics(GPS.calculateTrackingMetrics(updatedSession));
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [tracking, session]);
+
   const handleStartTracking = async () => {
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 300));
-      const newSession = GPS.startTracking('job-001', 'tech-001', mockLocation);
+      const newSession = GPS.startTracking('JOB-001', 'tech-001', mockLocation);
       setSession(newSession);
+      setMetrics(GPS.calculateTrackingMetrics(newSession));
       setTracking(true);
+      setElapsedTime(0);
     } finally {
       setLoading(false);
     }
@@ -34,8 +58,9 @@ export default function GPSTrackingScreen() {
     try {
       await new Promise(resolve => setTimeout(resolve, 300));
       const completed = GPS.completeTracking(session);
-      const metrics = GPS.calculateTrackingMetrics(completed);
+      const finalMetrics = GPS.calculateTrackingMetrics(completed);
       setSession(completed);
+      setMetrics(finalMetrics);
       setTracking(false);
     } finally {
       setLoading(false);
@@ -55,15 +80,31 @@ export default function GPSTrackingScreen() {
     <View style={styles.container}>
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
         {/* Status Card */}
-        <View style={[styles.statusCard, tracking && { borderColor: colors.chart.green, borderWidth: 2 }]}>
+        <View style={[styles.statusCard, tracking && { borderColor: colors.chart.green, borderWidth: 2, backgroundColor: colors.chart.green + '10' }]}>
           <View style={styles.statusIndicator}>
             <View style={[styles.dot, tracking && styles.dotActive]} />
             <Text style={styles.statusText}>{tracking ? 'Tracking Active' : 'Not Tracking'}</Text>
           </View>
           {session && (
-            <View>
-              <Text style={styles.statusDetail}>Distance: {(session.distance / 1000).toFixed(2)} km</Text>
-              <Text style={styles.statusDetail}>Job: {session.jobId}</Text>
+            <View style={styles.statusDetails}>
+              <View style={styles.statusRow}>
+                <Text style={styles.statusLabel}>Distance:</Text>
+                <Text style={styles.statusValue}>{(session.distance / 1000).toFixed(2)} km</Text>
+              </View>
+              <View style={styles.statusRow}>
+                <Text style={styles.statusLabel}>Job:</Text>
+                <Text style={styles.statusValue}>{session.jobId}</Text>
+              </View>
+              <View style={styles.statusRow}>
+                <Text style={styles.statusLabel}>Points:</Text>
+                <Text style={styles.statusValue}>{session.path.length}</Text>
+              </View>
+              {metrics && tracking && (
+                <View style={styles.statusRow}>
+                  <Text style={styles.statusLabel}>Avg Speed:</Text>
+                  <Text style={styles.statusValue}>{(metrics.averageSpeed * 3.6).toFixed(1)} km/h</Text>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -88,13 +129,17 @@ export default function GPSTrackingScreen() {
         )}
 
         {/* Metrics */}
-        {session && (
+        {session && metrics && (
           <View style={styles.metricsContainer}>
             <Text style={styles.sectionTitle}>Session Metrics</Text>
-            <MetricRow label="Total Distance" value={`${(session.distance / 1000).toFixed(2)} km`} />
+            <MetricRow label="Total Distance" value={`${(session.distance / 1000).toFixed(3)} km`} />
             <MetricRow label="Path Points" value={String(session.path.length)} />
+            <MetricRow label="Elapsed Time" value={`${Math.floor(elapsedTime / 60)}:${String(elapsedTime % 60).padStart(2, '0')}`} color={colors.primary} />
+            <MetricRow label="Avg Speed" value={`${(metrics.averageSpeed * 3.6).toFixed(1)} km/h`} />
+            <MetricRow label="Route Efficiency" value={`${metrics.routeEfficiency.toFixed(0)}%`} />
             <MetricRow label="Start Location" value={`${session.startLocation.latitude.toFixed(4)}, ${session.startLocation.longitude.toFixed(4)}`} />
-            <MetricRow label="Status" value={session.status} />
+            <MetricRow label="Current Location" value={`${session.currentLocation.latitude.toFixed(4)}, ${session.currentLocation.longitude.toFixed(4)}`} />
+            <MetricRow label="Status" value={session.status} color={session.status === 'Completed' ? colors.chart.green : colors.primary} />
           </View>
         )}
 
@@ -111,11 +156,11 @@ export default function GPSTrackingScreen() {
   );
 }
 
-function MetricRow({ label, value }: { label: string; value: string }) {
+function MetricRow({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <View style={styles.metricRow}>
       <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={[styles.metricValue, color && { color }]}>{value}</Text>
     </View>
   );
 }
@@ -136,6 +181,10 @@ const styles = StyleSheet.create({
   dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.mutedForeground },
   dotActive: { backgroundColor: colors.chart.green },
   statusText: { fontSize: 14, fontWeight: '600', color: colors.foreground },
+  statusDetails: { gap: 8 },
+  statusRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  statusLabel: { fontSize: 12, color: colors.mutedForeground },
+  statusValue: { fontSize: 12, fontWeight: '600', color: colors.foreground },
   statusDetail: { fontSize: 12, color: colors.mutedForeground, marginVertical: 2 },
   loadingContainer: { paddingVertical: 40, alignItems: 'center' },
   controlsContainer: { paddingHorizontal: 12, paddingVertical: 8 },

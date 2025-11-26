@@ -3,26 +3,53 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIn
 import { colors } from '../theme/colors';
 import * as Reports from '@/lib/reportGeneration';
 
-const MOCK_JOBS = Array.from({ length: 12 }, (_, i) => ({
+const MOCK_JOBS = Array.from({ length: 25 }, (_, i) => ({
   id: `j${i}`,
   jobId: `JOB-${String(i + 1).padStart(3, '0')}`,
   name: `Job ${i + 1}`,
-  status: ['Completed', 'In Progress'][Math.floor(Math.random() * 2)],
-  actualCost: Math.floor(Math.random() * 2000) + 500,
-  duration: Math.floor(Math.random() * 14400) + 3600,
-  assignedTechnician: 'John Doe',
+  description: `Installation and testing work`,
+  status: ['Completed', 'In Progress', 'Pending'][Math.floor(Math.random() * 3)],
+  actualCost: Math.floor(Math.random() * 3000) + 800,
+  estimatedCost: Math.floor(Math.random() * 3500) + 1000,
+  duration: Math.floor(Math.random() * 28800) + 3600,
+  assignedTechnician: ['John Doe', 'Jane Smith', 'Mike Johnson'][Math.floor(Math.random() * 3)],
 }));
+
+const MOCK_TECHNICIANS = [
+  { id: 't1', name: 'John Doe', role: 'Technician', currentUtilization: 75 },
+  { id: 't2', name: 'Jane Smith', role: 'Technician', currentUtilization: 65 },
+  { id: 't3', name: 'Mike Johnson', role: 'Team Lead', currentUtilization: 85 },
+];
+
+const MOCK_INVENTORY = [
+  { id: 'inv1', name: 'SMF Cable', currentStock: 450, minimumStock: 100, costPerUnit: 125 },
+  { id: 'inv2', name: 'Splitters', currentStock: 85, minimumStock: 20, costPerUnit: 450 },
+  { id: 'inv3', name: 'Connectors', currentStock: 1200, minimumStock: 200, costPerUnit: 12 },
+];
 
 export default function ReportsScreen() {
   const [selectedReport, setSelectedReport] = useState<Reports.ReportType>('JobCompletion');
+  const [selectedFormat, setSelectedFormat] = useState<Reports.ReportFormat>('PDF');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [generatedReport, setGeneratedReport] = useState<Reports.ReportData | null>(null);
 
   const generateReport = async (type: Reports.ReportType) => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      Alert.alert('Report Generated', `${type} report ready for export`);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      let report: Reports.ReportData;
+      
+      if (type === 'JobCompletion') {
+        report = Reports.generateJobCompletionReport(MOCK_JOBS, 'Monthly');
+      } else if (type === 'TeamPerformance') {
+        report = Reports.generateTeamPerformanceReport(MOCK_TECHNICIANS, []);
+      } else {
+        report = Reports.generateInventoryReport(MOCK_INVENTORY);
+      }
+      
+      setGeneratedReport(report);
+      Alert.alert('Success', `${type} report generated!\n\nFormat: ${selectedFormat}\nRecords: ${report.details.length}`);
     } finally {
       setLoading(false);
     }
@@ -61,32 +88,50 @@ export default function ReportsScreen() {
           title="Inventory Status"
           description="Stock levels and material costs"
           selected={selectedReport === 'Inventory'}
-          onPress={() => { setSelectedReport('Inventory'); generateReport('Inventory'); }}
+          onPress={() => { setSelectedReport('Inventory'); }}
         />
 
         {/* Export Formats */}
         <Text style={styles.sectionTitle}>Export Format</Text>
         <View style={styles.formatsContainer}>
           {['PDF', 'CSV', 'JSON', 'Excel'].map(format => (
-            <TouchableOpacity key={format} style={styles.formatButton}>
-              <Text style={styles.formatButtonText}>{format}</Text>
+            <TouchableOpacity key={format} style={[styles.formatButton, selectedFormat === format && styles.formatButtonActive]} onPress={() => setSelectedFormat(format as Reports.ReportFormat)}>
+              <Text style={[styles.formatButtonText, selectedFormat === format && styles.formatButtonTextActive]}>{format}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Loading State */}
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Generating report...</Text>
+        {/* Generate Button */}
+        <TouchableOpacity 
+          style={[styles.generateButton, loading && styles.generateButtonDisabled]} 
+          onPress={() => generateReport(selectedReport)}
+          disabled={loading}
+        >
+          <Text style={styles.generateButtonText}>{loading ? 'Generating...' : 'Generate Report'}</Text>
+        </TouchableOpacity>
+
+        {/* Generated Report Summary */}
+        {generatedReport && (
+          <View style={styles.reportSummary}>
+            <Text style={styles.sectionTitle}>Generated Report Summary</Text>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryTitle}>{generatedReport.title}</Text>
+              <Text style={styles.summaryMeta}>Period: {generatedReport.period}</Text>
+              <Text style={styles.summaryMeta}>Format: {selectedFormat}</Text>
+              <Text style={styles.summaryMeta}>Records: {generatedReport.details.length}</Text>
+              {generatedReport.summary && Object.entries(generatedReport.summary).map(([key, value]) => (
+                <Text key={key} style={styles.summaryData}>{key}: {typeof value === 'number' ? value.toFixed(2) : value}</Text>
+              ))}
+            </View>
           </View>
         )}
 
         {/* Recent Reports */}
-        <Text style={styles.sectionTitle}>Recent Activity</Text>
-        <RecentReportItem date="Today" report="Job Completion (PDF)" size="2.4 MB" />
+        <Text style={styles.sectionTitle}>Recent Reports</Text>
+        <RecentReportItem date="Today" report={`${selectedReport} (${selectedFormat})`} size="2.4 MB" />
         <RecentReportItem date="Yesterday" report="Team Performance (CSV)" size="156 KB" />
         <RecentReportItem date="2 days ago" report="Inventory Status (JSON)" size="892 KB" />
+        <RecentReportItem date="3 days ago" report="Job Completion (PDF)" size="4.1 MB" />
 
         {/* Features */}
         <Text style={styles.sectionTitle}>Report Features</Text>
@@ -134,20 +179,30 @@ function FeatureItem({ title, description }: { title: string; description: strin
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  sectionTitle: { fontSize: 14, fontWeight: '600', color: colors.foreground, paddingHorizontal: 12, paddingVertical: 12 },
+  sectionTitle: { fontSize: 13, fontWeight: '600', color: colors.foreground, paddingHorizontal: 12, paddingVertical: 10 },
   reportCard: { marginHorizontal: 12, marginBottom: 8, padding: 12, backgroundColor: colors.card, borderRadius: 6, borderWidth: 1, borderColor: colors.border },
   reportCardSelected: { borderColor: colors.primary, borderWidth: 2, backgroundColor: colors.primary + '15' },
   reportCardTitle: { fontSize: 13, fontWeight: '600', color: colors.foreground, marginBottom: 4 },
   reportCardDescription: { fontSize: 11, color: colors.mutedForeground },
   formatsContainer: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingBottom: 12 },
   formatButton: { flex: 1, paddingVertical: 8, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 4, alignItems: 'center' },
+  formatButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   formatButtonText: { fontSize: 11, fontWeight: '600', color: colors.foreground },
+  formatButtonTextActive: { color: colors.background },
+  generateButton: { marginHorizontal: 12, marginBottom: 12, paddingVertical: 12, backgroundColor: colors.chart.green, borderRadius: 6, alignItems: 'center' },
+  generateButtonDisabled: { opacity: 0.6 },
+  generateButtonText: { fontSize: 13, fontWeight: '600', color: colors.background },
+  reportSummary: { paddingHorizontal: 12, marginBottom: 12 },
+  summaryCard: { backgroundColor: colors.card, borderRadius: 6, padding: 12, borderWidth: 1, borderColor: colors.primary },
+  summaryTitle: { fontSize: 12, fontWeight: '600', color: colors.primary, marginBottom: 8 },
+  summaryMeta: { fontSize: 10, color: colors.mutedForeground, marginBottom: 4 },
+  summaryData: { fontSize: 10, color: colors.foreground, marginBottom: 2 },
   loadingContainer: { paddingVertical: 40, alignItems: 'center' },
   loadingText: { fontSize: 13, color: colors.mutedForeground, marginTop: 12 },
   recentItem: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
-  recentDate: { fontSize: 11, color: colors.mutedForeground, marginBottom: 2 },
-  recentReport: { fontSize: 13, fontWeight: '600', color: colors.foreground },
-  recentSize: { fontSize: 11, color: colors.chart.green, fontWeight: '600' },
+  recentDate: { fontSize: 10, color: colors.mutedForeground, marginBottom: 2 },
+  recentReport: { fontSize: 12, fontWeight: '600', color: colors.foreground },
+  recentSize: { fontSize: 10, color: colors.chart.green, fontWeight: '600' },
   featureItem: { marginHorizontal: 12, marginBottom: 8, padding: 12, backgroundColor: colors.card, borderRadius: 6, borderWidth: 1, borderColor: colors.border },
   featureTitle: { fontSize: 12, fontWeight: '600', color: colors.foreground, marginBottom: 4 },
   featureDescription: { fontSize: 11, color: colors.mutedForeground },
