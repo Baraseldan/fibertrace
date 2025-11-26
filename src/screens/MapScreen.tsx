@@ -15,6 +15,24 @@ import { colors } from '../theme/colors';
 import { calculateDistance } from '../lib/utils';
 import { JobFormModal } from './JobFormModal';
 
+// Map components - Web fallback only
+const MapView = ({ style, region, onRegionChange, children, provider }: any) => (
+  <View style={[style, { backgroundColor: colors.background }]} />
+);
+const Marker = ({ coordinate, pinColor, title, description, onPress }: any) => null;
+const Polyline = ({ coordinates, strokeColor, strokeWidth }: any) => null;
+const PROVIDER_GOOGLE = null;
+
+// Location mock for web
+const Location = {
+  requestForegroundPermissionsAsync: async () => ({ status: 'granted' }),
+  getCurrentPositionAsync: async () => ({
+    coords: { latitude: 37.78825, longitude: -122.4324 },
+  }),
+  Accuracy: { BestForNavigation: 6 },
+  watchPositionAsync: async () => ({ remove: () => {} }),
+};
+
 const { width, height } = Dimensions.get('window');
 
 export function MapScreen() {
