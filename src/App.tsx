@@ -7,7 +7,7 @@ import PasswordRecoveryScreen from './screens/PasswordRecoveryScreen';
 import { MapScreen } from './screens/MapScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { CustomerScreen } from './screens/CustomerScreen';
-import JobListScreen from './screens/JobListScreen';
+import JobsHubScreen from './screens/JobsHubScreen';
 import InventoryScreen from './screens/InventoryScreen';
 import ScheduleScreen from './screens/ScheduleScreen';
 import SearchScreen from './screens/SearchScreen';
@@ -118,7 +118,7 @@ function AppContent() {
   const screens: Record<string, React.ComponentType<any>> = {
     Dashboard: DashboardScreen,
     Map: MapScreen,
-    Jobs: JobListScreen,
+    Jobs: JobsHubScreen,
     Inventory: InventoryScreen,
     Schedule: ScheduleScreen,
     Customers: CustomerScreen,
