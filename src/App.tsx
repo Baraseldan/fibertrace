@@ -84,6 +84,7 @@ function AppContent() {
     await AuthStorage.clearUser();
     setIsLoggedIn(false);
     setActiveTab('Dashboard');
+    setAuthScreen('login');
   };
 
   // Show auth screens if not logged in
