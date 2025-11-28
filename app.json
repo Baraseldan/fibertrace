@@ -3,6 +3,7 @@
     "name": "FiberTrace",
     "slug": "fibertrace",
     "version": "1.0.0",
+    "runtimeVersion": "1.0.0",
     "orientation": "portrait",
     "icon": "./public/assets/fiber-bg.png",
     "userInterfaceStyle": "dark",
@@ -38,10 +39,6 @@
     },
     "web": {
       "favicon": "./public/assets/fiber-bg.png"
-    },
-    "extra": {
-      "apiUrl": "https://api.fibertrace.app/api",
-      "environment": "production"
     }
   }
 }
