@@ -6,24 +6,15 @@ import RegisterScreen from './screens/RegisterScreen';
 import PasswordRecoveryScreen from './screens/PasswordRecoveryScreen';
 import { MapScreen } from './screens/MapScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
-import { NodeManagementScreen } from './screens/NodeManagementScreen';
-import { RouteManagementScreen } from './screens/RouteManagementScreen';
-import { ClosureScreen } from './screens/ClosureScreen';
 import { CustomerScreen } from './screens/CustomerScreen';
-import { SpliceScreen } from './screens/SpliceScreen';
 import JobListScreen from './screens/JobListScreen';
 import InventoryScreen from './screens/InventoryScreen';
 import ScheduleScreen from './screens/ScheduleScreen';
-import AnalyticsScreen from './screens/AnalyticsScreen';
 import SearchScreen from './screens/SearchScreen';
-import GPSTrackingScreen from './screens/GPSTrackingScreen';
-import ReportsScreen from './screens/ReportsScreen';
-import NotificationsScreen from './screens/NotificationsScreen';
-import BluetoothScreen from './screens/BluetoothScreen';
-import PerformanceScreen from './screens/PerformanceScreen';
-import SettingsScreen from './screens/SettingsScreen';
-import UserProfileScreen from './screens/UserProfileScreen';
-import SyncStatusScreen from './screens/SyncStatusScreen';
+import ToolsHubScreen from './screens/ToolsHubScreen';
+import InfrastructureHubScreen from './screens/InfrastructureHubScreen';
+import ReportsHubScreen from './screens/ReportsHubScreen';
+import SettingsHubScreen from './screens/SettingsHubScreen';
 import { colors } from './theme/colors';
 import { initializeOfflineStorage } from './lib/offlineStorage';
 import * as AuthStorage from './lib/authStorage';
@@ -127,24 +118,15 @@ function AppContent() {
   const screens: Record<string, React.ComponentType<any>> = {
     Dashboard: DashboardScreen,
     Map: MapScreen,
-    Nodes: NodeManagementScreen,
-    Routes: RouteManagementScreen,
-    Closures: ClosureScreen,
-    Customers: CustomerScreen,
-    Splices: SpliceScreen,
     Jobs: JobListScreen,
     Inventory: InventoryScreen,
     Schedule: ScheduleScreen,
-    Analytics: AnalyticsScreen,
+    Customers: CustomerScreen,
     Search: SearchScreen,
-    GPS: GPSTrackingScreen,
-    Reports: ReportsScreen,
-    Alerts: NotificationsScreen,
-    BT: BluetoothScreen,
-    Perf: PerformanceScreen,
-    Settings: SettingsScreen,
-    Profile: UserProfileScreen,
-    Sync: SyncStatusScreen,
+    Infrastructure: InfrastructureHubScreen,
+    Reports: ReportsHubScreen,
+    Tools: ToolsHubScreen,
+    Settings: () => <SettingsHubScreen onLogout={handleLogout} />,
   };
 
   const ActiveScreen = screens[activeTab];
