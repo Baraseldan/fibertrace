@@ -142,16 +142,6 @@ export default function LoginScreen({ onLoginSuccess, onSwitchToRegister, onSwit
             </TouchableOpacity>
           </View>
 
-          <View style={styles.featureList}>
-            <FeatureItem title="🔐 Secure Auth" description="Email-verified accounts with role-based access" />
-            <FeatureItem title="📱 Offline First" description="Work completely without internet" />
-            <FeatureItem title="🔄 Auto Sync" description="Seamless sync when online" />
-          </View>
-
-          <View style={styles.footer}>
-            <Text style={styles.mottoText}>🌐 Connecting Infrastructure • Bridging Networks • Empowering Operations</Text>
-            <Text style={styles.copyrightText}>© 2024 FiberTrace • Data Integrity & Security First</Text>
-          </View>
         </ScrollView>
       </View>
     </ImageBackground>

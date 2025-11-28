@@ -40,13 +40,13 @@ interface Node {
 }
 
 export function MapScreen() {
-  // Web fallback
+  // Web and unsupported platforms fallback
   if (Platform.OS === 'web') {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, padding: 20 }}>
-        <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.foreground, marginBottom: 10 }}>Map View</Text>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.foreground, marginBottom: 10 }}>Map - Offline Mode</Text>
         <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: 'center' }}>
-          Map features require native mobile capabilities. Please use the mobile app to access map functionality.
+          Maps display infrastructure nodes, routes, and fiber lines. Full interactive features available on native Android/iOS devices.
         </Text>
       </View>
     );

@@ -158,29 +158,22 @@ function SettingsTab() {
 
 function ProfileTab({ onLogout }: { onLogout?: () => void }) {
   const [user, setUser] = useState({
-    id: 'tech-001',
-    name: 'John Doe',
-    email: 'john.doe@company.com',
+    id: 'unknown',
+    name: 'Technician',
+    email: 'user@fibertrace.app',
     role: 'Technician',
-    phone: '+1 (555) 123-4567',
-    department: 'Field Operations',
-    location: 'New York City',
-    jobsCompleted: 127,
-    hoursLogged: 892,
-    specializations: ['Splicing', 'Testing', 'Installation'],
-    joinDate: 'January 2023',
   });
 
   React.useEffect(() => {
     const loadUser = async () => {
       const savedUser = await AuthStorage.getStoredUser();
       if (savedUser) {
-        setUser(prev => ({
-          ...prev,
-          name: savedUser.full_name || prev.name,
-          email: savedUser.email || prev.email,
-          role: savedUser.role || prev.role,
-        }));
+        setUser({
+          id: savedUser.id?.toString() || 'unknown',
+          name: savedUser.full_name || 'Technician',
+          email: savedUser.email,
+          role: savedUser.role || 'Technician',
+        });
       }
     };
     loadUser();
@@ -210,23 +203,21 @@ function ProfileTab({ onLogout }: { onLogout?: () => void }) {
     <ScrollView>
       <View style={styles.profileHeader}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user.name.split(' ').map(n => n[0]).join('')}</Text>
+          <Text style={styles.avatarText}>{user.name.split(' ').map((n: string) => n[0]).join('')}</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.userName}>{user.name}</Text>
           <Text style={styles.userRole}>{user.role}</Text>
-          <Text style={styles.userId}>ID: {user.id}</Text>
+          <Text style={styles.userEmail}>{user.email}</Text>
         </View>
       </View>
 
-      <View style={styles.statsContainer}>
-        <StatBox label="Jobs Completed" value={user.jobsCompleted.toString()} color={colors.chart.cyan} />
-        <StatBox label="Hours Logged" value={user.hoursLogged.toString()} color={colors.chart.green} />
-        <StatBox label="Rating" value="4.9★" color={colors.chart.amber} />
-      </View>
-
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Contact Information</Text>
+        <Text style={styles.sectionTitle}>Account Details</Text>
+        <InfoRow label="Email" value={user.email} />
+        <InfoRow label="Role" value={user.role} />
+        <InfoRow label="ID" value={user.id} />
+      </View>
         <InfoField label="Email" value={user.email} />
         <InfoField label="Phone" value={user.phone} />
         <InfoField label="Department" value={user.department} />
