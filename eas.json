@@ -5,7 +5,8 @@
   "build": {
     "production": {
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "artifactPath": "fibertrace.apk"
       },
       "env": {
         "npm_config_legacy_peer_deps": "true"
@@ -13,7 +14,8 @@
     },
     "preview": {
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "artifactPath": "fibertrace.apk"
       },
       "env": {
         "npm_config_legacy_peer_deps": "true"
