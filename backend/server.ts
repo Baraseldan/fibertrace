@@ -6,7 +6,7 @@ import pg from 'pg';
 
 const { Pool } = pg;
 const app: Express = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 
 // Extend Express Request type to include user property
 declare global {

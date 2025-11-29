@@ -10,5 +10,5 @@ cd /home/runner/workspace/backend
 npm install
 
 # Start server
-echo "✅ Starting Express server on port 5001..."
+echo "✅ Starting Express server on port 5000..."
 npm run dev
