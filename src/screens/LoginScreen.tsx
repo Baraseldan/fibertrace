@@ -9,11 +9,6 @@ interface LoginScreenProps {
   onSwitchToRecovery?: () => void;
 }
 
-const DEMO_ACCOUNTS = [
-  { email: 'admin@fibertrace.app', password: 'admin123456', role: 'Admin' },
-  { email: 'john@fibertrace.app', password: 'tech123456', role: 'Technician' },
-  { email: 'jane@fibertrace.app', password: 'field123456', role: 'Field Tech' },
-];
 
 export default function LoginScreen({ onLoginSuccess, onSwitchToRegister, onSwitchToRecovery }: LoginScreenProps) {
   const [email, setEmail] = useState('');
@@ -126,23 +121,6 @@ export default function LoginScreen({ onLoginSuccess, onSwitchToRegister, onSwit
               </View>
             </View>
 
-            <View style={styles.demoSection}>
-              <Text style={styles.demoLabel}>Demo Accounts:</Text>
-              {DEMO_ACCOUNTS.map((account) => (
-                <TouchableOpacity
-                  key={account.email}
-                  style={styles.demoButton}
-                  onPress={() => {
-                    setEmail(account.email);
-                    setPassword(account.password);
-                  }}
-                  disabled={loading}
-                >
-                  <Text style={styles.demoButtonText}>{account.role}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
             <TouchableOpacity
               style={[styles.loginButton, loading && styles.loginButtonDisabled]}
               onPress={handleLogin}
@@ -207,8 +185,4 @@ const styles = StyleSheet.create({
   footer: { alignItems: 'center', paddingVertical: 20, marginTop: 20, borderTopWidth: 1, borderTopColor: 'rgba(0, 255, 255, 0.2)' },
   mottoText: { fontSize: 12, color: '#00ffff', fontWeight: '600', marginBottom: 4 },
   copyrightText: { fontSize: 11, color: colors.mutedForeground },
-  demoSection: { marginVertical: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0, 255, 255, 0.2)' },
-  demoLabel: { fontSize: 11, color: colors.mutedForeground, marginBottom: 8, fontWeight: '600' },
-  demoButton: { backgroundColor: 'rgba(0, 255, 255, 0.1)', borderWidth: 1, borderColor: '#00ffff', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, marginBottom: 6, alignItems: 'center' },
-  demoButtonText: { fontSize: 12, color: '#00ffff', fontWeight: '500' },
 });
