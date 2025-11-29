@@ -13,9 +13,26 @@ import { api } from '../lib/api';
 
 const { width } = Dimensions.get('window');
 
+interface NodeStatistics {
+  totalNodes: number;
+  activeRoutes: number;
+  averagePower: number;
+  unsyncedCount: number;
+  byType: Record<string, number>;
+}
+
+interface RouteStatistics {
+  totalRoutes: number;
+  totalDistance: number;
+  routesWithFaults: number;
+  totalCableLength: number;
+  byType: Record<string, number>;
+  byStatus: Record<string, number>;
+}
+
 export function DashboardScreen() {
-  const [nodeStats, setNodeStats] = useState<any>(null);
-  const [routeStats, setRouteStats] = useState<any>(null);
+  const [nodeStats, setNodeStats] = useState<NodeStatistics | null>(null);
+  const [routeStats, setRouteStats] = useState<RouteStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -80,7 +97,7 @@ export function DashboardScreen() {
     setRefreshing(false);
   };
 
-  const StatCard = ({ title, value, unit, color }: any) => (
+  const StatCard = ({ title, value, unit, color }: { title: string; value: number | string; unit: string; color: string }) => (
     <View style={[styles.statCard, { borderLeftColor: color }]}>
       <Text style={styles.statTitle}>{title}</Text>
       <Text style={[styles.statValue, { color }]}>
@@ -89,17 +106,28 @@ export function DashboardScreen() {
     </View>
   );
 
-  const SectionCard = ({ title, children }: any) => (
+  const SectionCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <View style={styles.sectionCard}>
       <Text style={styles.sectionTitle}>{title}</Text>
       {children}
     </View>
   );
 
+  const EmptyState = () => (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyStateTitle}>No Data Available</Text>
+      <Text style={styles.emptyStateText}>Pull down to refresh or check your connection</Text>
+    </View>
+  );
+
+  if (!nodeStats && !routeStats && !loading) {
+    return <EmptyState />;
+  }
+
   return (
     <ScrollView
       style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
     >
       {loading ? (
         <View style={styles.centerContent}>
@@ -229,7 +257,7 @@ function DetailRow({ label, value, color }: any) {
   );
 }
 
-function StatusIndicator({ label, status, color }: any) {
+function StatusIndicator({ label, status, color }: { label: string; status: string; color: string }) {
   return (
     <View style={styles.statusRow}>
       <Text style={[styles.statusDot, { color }]}>{status}</Text>
@@ -334,5 +362,23 @@ const styles = StyleSheet.create({
   statusText: {
     color: colors.foreground,
     fontSize: 14,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 60,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.foreground,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: colors.mutedForeground,
+    textAlign: 'center'
   },
 });

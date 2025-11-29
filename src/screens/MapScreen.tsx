@@ -108,16 +108,16 @@ export function MapScreen() {
     issues: true,
   });
 
-  const toggleLayer = (layer: keyof MapModule.MapLayerVisibility) => {
-    setLayerVisibilityState(prev => ({
+  const toggleLayer = (layer: keyof MapModule.MapLayerVisibility): void => {
+    setLayerVisibilityState((prev: MapModule.MapLayerVisibility) => ({
       ...prev,
       [layer]: !prev[layer]
     }));
   };
 
   // Filter nodes based on layer visibility
-  const getVisibleNodes = () => {
-    return allNodes.filter(node => {
+  const getVisibleNodes = (): MapModule.MapNode[] => {
+    return allNodes.filter((node: MapModule.MapNode) => {
       const nodeType = node.type.toLowerCase();
       if (nodeType.includes('olt')) return layerVisibility.olts;
       if (nodeType.includes('splitter')) return layerVisibility.splitters;
@@ -376,7 +376,7 @@ export function MapScreen() {
         onRegionChange={setRegion}
       >
         {/* FIBER LINES OVERLAY */}
-        {layerVisibility.fiberLines && fiberLines.map((line) => (
+        {layerVisibility.fiberLines && fiberLines.map((line: MapModule.FiberLine) => (
           // @ts-ignore - Mobile-only component
           <Polyline
             key={`line-${line.id}`}
@@ -391,7 +391,7 @@ export function MapScreen() {
         ))}
 
         {/* NODE MARKERS OVERLAY */}
-        {getVisibleNodes().map((node) => {
+        {getVisibleNodes().map((node: MapModule.MapNode) => {
           // @ts-ignore - Mobile-only component
           return (
             <Marker
@@ -611,7 +611,7 @@ export function MapScreen() {
             <Text style={styles.modalTitle}>Map Layers</Text>
 
             <ScrollView style={{ maxHeight: '70%' }}>
-              {Object.entries(layerVisibility).map(([layer, visible]) => (
+              {Object.entries(layerVisibility).map(([layer, visible]: [string, boolean]) => (
                 <TouchableOpacity
                   key={layer}
                   style={[styles.layerToggle, { backgroundColor: visible ? colors.primary : colors.card }]}
