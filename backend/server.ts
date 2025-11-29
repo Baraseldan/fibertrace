@@ -487,3 +487,40 @@ app.get('/api/admin/email-config', async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// ============ USER SETTINGS ============
+app.get('/api/users/:userId/settings', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const result = await pool.query(
+      'SELECT settings FROM users WHERE id = $1',
+      [userId]
+    );
+    res.json({ success: true, settings: result.rows[0]?.settings || {} });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/users/:userId/settings', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const settings = req.body;
+    await pool.query(
+      'UPDATE users SET settings = $1 WHERE id = $2',
+      [JSON.stringify(settings), userId]
+    );
+    res.json({ success: true, message: 'Settings updated' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`✅ FiberTrace Backend running on port ${PORT}`);
+  console.log(`📱 API Base: http://localhost:${PORT}`);
+  console.log(`🔌 Database: PostgreSQL (connected)`);
+  console.log(`📊 API Endpoints Ready - PostgreSQL Integration Active`);
+});

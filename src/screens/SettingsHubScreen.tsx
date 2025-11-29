@@ -348,10 +348,13 @@ function NotificationsTab() {
   );
 }
 
-function SettingRow({ label, value, onToggle }: { label: string; value: boolean; onToggle: (v: boolean) => void }) {
+function SettingRow({ label, value, onToggle, subtitle }: { label: string; value: boolean; onToggle: (v: boolean) => void; subtitle?: string }) {
   return (
     <View style={styles.settingRow}>
-      <Text style={styles.settingLabel}>{label}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.settingLabel}>{label}</Text>
+        {subtitle && <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2 }}>{subtitle}</Text>}
+      </View>
       <Switch value={value} onValueChange={onToggle} trackColor={{ false: colors.card, true: colors.primary }} />
     </View>
   );
@@ -399,4 +402,9 @@ const styles = StyleSheet.create({
   aboutVersion: { fontSize: 12, color: colors.mutedForeground, marginBottom: 8 },
   aboutDesc: { fontSize: 12, color: colors.foreground, textAlign: 'center', marginBottom: 4 },
   aboutCopy: { fontSize: 11, color: colors.mutedForeground },
+  frequencyOptions: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  freqButton: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.card, borderRadius: 6, borderWidth: 1, borderColor: colors.border },
+  freqButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  freqText: { fontSize: 11, color: colors.foreground },
+  freqTextActive: { color: colors.background, fontWeight: '600' },
 });

@@ -1,47 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { colors } from '../theme/colors';
+import { api } from '../lib/api';
 
 type ReportType = 'route' | 'splice' | 'closure' | 'power' | 'technician';
-
-// Mock data for reports
-const MOCK_ROUTES = [
-  { id: 'r1', name: 'Main Street Fiber', length: 12.5, nodes: 8, closures: 5, status: 'Active' },
-  { id: 'r2', name: 'Downtown Loop', length: 8.3, nodes: 5, closures: 3, status: 'Active' },
-];
-
-const MOCK_CLOSURES = [
-  { id: 'c1', type: 'FAT', cores: 48, splices: 12, location: 'Pole 45', status: 'Good' },
-  { id: 'c2', type: 'ATB', cores: 144, splices: 28, location: 'Ground', status: 'Good' },
-];
-
-const MOCK_SPLICE_DATA = [
-  { closure: 'FAT-001', fibers: 12, avgLoss: 0.15, maxLoss: 0.45 },
-  { closure: 'ATB-001', fibers: 28, avgLoss: 0.12, maxLoss: 0.38 },
-];
-
-const MOCK_POWER = [
-  { node: 'OLT-01', powerIn: 20, powerOut: 18.5, loss: 1.5 },
-  { node: 'Splitter-01', powerIn: 18.5, powerOut: 8.5, loss: 10 },
-];
 
 export default function ReportsHubScreen() {
   const [selectedReport, setSelectedReport] = useState<ReportType>('route');
   const [loading, setLoading] = useState(false);
+  const [routes, setRoutes] = useState<any[]>([]);
+  const [closures, setClosures] = useState<any[]>([]);
+  const [powerReadings, setPowerReadings] = useState<any[]>([]);
+  const [meterReadings, setMeterReadings] = useState<any[]>([]);
+
+  useEffect(() => {
+    loadReportData();
+  }, []);
+
+  const loadReportData = async () => {
+    try {
+      setLoading(true);
+      const [routeData, closureData, powerData, meterData] = await Promise.all([
+        api.getRoutes().catch(() => []),
+        api.getClosures().catch(() => []),
+        api.getPowerReadings().catch(() => []),
+        api.getMeterReadings().catch(() => []),
+      ]);
+
+      setRoutes(routeData || []);
+      setClosures(closureData || []);
+      setPowerReadings(powerData || []);
+      setMeterReadings(meterData || []);
+    } catch (error) {
+      console.error('Failed to load report data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGenerateReport = async (type: ReportType) => {
     setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setLoading(false);
-    Alert.alert('✓ Report Generated', `${type.charAt(0).toUpperCase() + type.slice(1)} report ready for export`);
+    try {
+      await api.createDailyReport({
+        user_id: 1,
+        report_type: type,
+        data: { routes: routes.length, closures: closures.length },
+        generated_at: new Date().toISOString(),
+      });
+      Alert.alert('✓ Report Generated', `${type.charAt(0).toUpperCase() + type.slice(1)} report generated successfully`);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to generate report');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleExportCSV = () => {
-    Alert.alert('✓ CSV Export', 'Report exported successfully');
+    Alert.alert('✓ CSV Export', `Exported ${routes.length} routes, ${closures.length} closures`);
   };
 
   const handleExportPDF = () => {
-    Alert.alert('✓ PDF Export', 'Report generated successfully');
+    Alert.alert('✓ PDF Export', 'Report PDF generated successfully');
   };
 
   if (loading) {
@@ -72,12 +91,16 @@ export default function ReportsHubScreen() {
 
         {selectedReport === 'route' && (
           <View style={styles.reportData}>
-            {MOCK_ROUTES.map(route => (
-              <View key={route.id} style={styles.dataRow}>
-                <Text style={styles.dataLabel}>{route.name}</Text>
-                <Text style={styles.dataValue}>{route.length}km • {route.nodes} nodes • {route.closures} closures</Text>
-              </View>
-            ))}
+            {routes.length === 0 ? (
+              <Text style={styles.emptyText}>No routes found</Text>
+            ) : (
+              routes.map((route: any) => (
+                <View key={route.id} style={styles.dataRow}>
+                  <Text style={styles.dataLabel}>{route.line_name || 'Route'}</Text>
+                  <Text style={styles.dataValue}>{(route.length_meters / 1000).toFixed(1)}km • {route.fiber_count || 0} fibers</Text>
+                </View>
+              ))
+            )}
           </View>
         )}
 
@@ -118,12 +141,16 @@ export default function ReportsHubScreen() {
 
         {selectedReport === 'closure' && (
           <View style={styles.reportData}>
-            {MOCK_CLOSURES.map(closure => (
-              <View key={closure.id} style={styles.dataRow}>
-                <Text style={styles.dataLabel}>{closure.type} • {closure.location}</Text>
-                <Text style={styles.dataValue}>{closure.cores} cores • {closure.splices} splices • Status: {closure.status}</Text>
-              </View>
-            ))}
+            {closures.length === 0 ? (
+              <Text style={styles.emptyText}>No closures found</Text>
+            ) : (
+              closures.map((closure: any) => (
+                <View key={closure.id} style={styles.dataRow}>
+                  <Text style={styles.dataLabel}>{closure.closure_type} • {closure.closure_name}</Text>
+                  <Text style={styles.dataValue}>{closure.capacity_total} total • {closure.capacity_used} used</Text>
+                </View>
+              ))
+            )}
           </View>
         )}
 

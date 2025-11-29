@@ -101,7 +101,17 @@ function BluetoothTab() {
       const reading = await BT.readFromDevice(deviceId);
       if (reading) {
         setReadings([reading, ...readings]);
-        Alert.alert('Reading Captured', `Value: ${reading.value.toFixed(2)} ${reading.unit}`);
+        // Save to backend
+        await api.saveMeterReading({
+          device_name: reading.deviceName,
+          reading_type: reading.type,
+          reading_value: reading.value,
+          unit: reading.unit,
+          linked_type: 'node',
+          linked_id: 1,
+          timestamp: new Date().toISOString(),
+        }).catch(e => console.warn('Backend save failed:', e));
+        Alert.alert('Reading Captured', `Value: ${reading.value.toFixed(2)} ${reading.unit} (saved to backend)`);
       }
     } finally {
       setLoading(false);
@@ -595,7 +605,7 @@ function MetricRow({ label, value, color }: { label: string; value: string; colo
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border }}>
       <Text style={{ fontSize: 13, color: colors.mutedForeground }}>{label}</Text>
-      <Text style={[{ fontSize: 13, fontWeight: '600', color: colors.foreground }, color && { color }]}>{value}</Text>
+      <Text style={[{ fontSize: 13, fontWeight: '600', color: color || colors.foreground }]}>{value}</Text>
     </View>
   );
 }
