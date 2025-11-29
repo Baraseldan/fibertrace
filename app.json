@@ -15,9 +15,6 @@
     "assetBundlePatterns": [
       "**/*"
     ],
-    "plugins": [
-      ["expo-splash-screen"]
-    ],
     "ios": {
       "bundleIdentifier": "com.fibertrace.app",
       "buildNumber": "1",
