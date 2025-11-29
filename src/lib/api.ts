@@ -1,37 +1,103 @@
-// API client for mobile app - connects to same backend
+// API client for mobile app - connects to real backend
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
 
 export const api = {
-  async getOlts() {
-    const res = await fetch(`${API_BASE}/api/olts`);
-    if (!res.ok) throw new Error('Failed to fetch OLTs');
+  // ===== NODES =====
+  async getNodes() {
+    const res = await fetch(`${API_BASE}/api/nodes`);
+    if (!res.ok) throw new Error('Failed to fetch nodes');
     return res.json();
   },
 
-  async getSplitters() {
-    const res = await fetch(`${API_BASE}/api/splitters`);
-    if (!res.ok) throw new Error('Failed to fetch Splitters');
+  async createNode(data: any) {
+    const res = await fetch(`${API_BASE}/api/nodes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create node');
     return res.json();
   },
 
-  async getFats() {
-    const res = await fetch(`${API_BASE}/api/fats`);
-    if (!res.ok) throw new Error('Failed to fetch FATs');
+  async updateNode(id: number, data: any) {
+    const res = await fetch(`${API_BASE}/api/nodes/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update node');
     return res.json();
   },
 
-  async getAtbs() {
-    const res = await fetch(`${API_BASE}/api/atbs`);
-    if (!res.ok) throw new Error('Failed to fetch ATBs');
-    return res.json();
-  },
-
+  // ===== CLOSURES (FAT, ATB, Dome, etc.) =====
   async getClosures() {
     const res = await fetch(`${API_BASE}/api/closures`);
-    if (!res.ok) throw new Error('Failed to fetch Closures');
+    if (!res.ok) throw new Error('Failed to fetch closures');
     return res.json();
   },
 
+  async createClosure(data: any) {
+    const res = await fetch(`${API_BASE}/api/closures`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create closure');
+    return res.json();
+  },
+
+  // ===== SPLITTERS =====
+  async getSplitters() {
+    const res = await fetch(`${API_BASE}/api/splitters`);
+    if (!res.ok) throw new Error('Failed to fetch splitters');
+    return res.json();
+  },
+
+  async createSplitter(data: any) {
+    const res = await fetch(`${API_BASE}/api/splitters`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create splitter');
+    return res.json();
+  },
+
+  // ===== ROUTES =====
+  async getRoutes() {
+    const res = await fetch(`${API_BASE}/api/routes`);
+    if (!res.ok) throw new Error('Failed to fetch routes');
+    return res.json();
+  },
+
+  async createRoute(data: any) {
+    const res = await fetch(`${API_BASE}/api/routes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create route');
+    return res.json();
+  },
+
+  // ===== POWER READINGS =====
+  async getPowerReadings() {
+    const res = await fetch(`${API_BASE}/api/power-readings`);
+    if (!res.ok) throw new Error('Failed to fetch power readings');
+    return res.json();
+  },
+
+  async createPowerReading(data: any) {
+    const res = await fetch(`${API_BASE}/api/power-readings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create power reading');
+    return res.json();
+  },
+
+  // ===== JOBS =====
   async getJobs() {
     const res = await fetch(`${API_BASE}/api/jobs`);
     if (!res.ok) throw new Error('Failed to fetch jobs');
@@ -56,7 +122,7 @@ export const api = {
 
   async updateJob(id: number, data: any) {
     const res = await fetch(`${API_BASE}/api/jobs/${id}`, {
-      method: 'PATCH',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
@@ -66,7 +132,7 @@ export const api = {
 
   async updateJobStatus(id: number, status: string) {
     const res = await fetch(`${API_BASE}/api/jobs/${id}`, {
-      method: 'PATCH',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
@@ -82,19 +148,43 @@ export const api = {
     return res.json();
   },
 
-  async getFiberRoutes() {
-    const res = await fetch(`${API_BASE}/api/fiber-routes`);
-    if (!res.ok) throw new Error('Failed to fetch routes');
+  // ===== REPORTS & STATS =====
+  async getStats() {
+    const res = await fetch(`${API_BASE}/api/stats`);
+    if (!res.ok) throw new Error('Failed to fetch stats');
     return res.json();
   },
 
-  async saveFiberRoute(data: any) {
-    const res = await fetch(`${API_BASE}/api/fiber-routes`, {
+  async getDailyReports() {
+    const res = await fetch(`${API_BASE}/api/daily-reports`);
+    if (!res.ok) throw new Error('Failed to fetch daily reports');
+    return res.json();
+  },
+
+  async createDailyReport(data: any) {
+    const res = await fetch(`${API_BASE}/api/daily-reports`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error('Failed to save route');
+    if (!res.ok) throw new Error('Failed to create daily report');
+    return res.json();
+  },
+
+  // ===== FAT PORTS =====
+  async getFatPorts() {
+    const res = await fetch(`${API_BASE}/api/fat-ports`);
+    if (!res.ok) throw new Error('Failed to fetch FAT ports');
+    return res.json();
+  },
+
+  async createFatPort(data: any) {
+    const res = await fetch(`${API_BASE}/api/fat-ports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create FAT port');
     return res.json();
   },
 };

@@ -9,8 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { colors } from '../theme/colors';
-import * as NodeManagement from '../lib/nodeManagement';
-import * as RouteManagement from '../lib/routeManagement';
+import { api } from '../lib/api';
 
 const { width } = Dimensions.get('window');
 
@@ -22,11 +21,43 @@ export function DashboardScreen() {
 
   const loadData = async () => {
     try {
-      const nodes = await NodeManagement.loadNodeDatabase();
-      const routes = await RouteManagement.loadRouteDatabase();
+      setLoading(true);
+      const [nodes, routes] = await Promise.all([
+        api.getNodes().catch(() => []),
+        api.getRoutes().catch(() => []),
+      ]);
 
-      const nStats = NodeManagement.getNodeStats(nodes);
-      const rStats = RouteManagement.getRouteStats(routes);
+      // Build stats from real data
+      const nStats = {
+        totalNodes: nodes.length,
+        activeRoutes: routes.filter((r: any) => r.status === 'active').length,
+        averagePower: nodes.reduce((sum: number, n: any) => sum + (n.power_rating || 0), 0) / (nodes.length || 1),
+        unsyncedCount: 0,
+        byType: {
+          OLT: nodes.filter((n: any) => n.node_type === 'OLT').length,
+          Splitter: nodes.filter((n: any) => n.node_type === 'Splitter').length,
+          FAT: nodes.filter((n: any) => n.node_type === 'FAT').length,
+          ATB: nodes.filter((n: any) => n.node_type === 'ATB').length,
+          Closure: nodes.filter((n: any) => n.node_type === 'Closure').length,
+        },
+      };
+
+      const rStats = {
+        totalRoutes: routes.length,
+        totalDistance: routes.reduce((sum: number, r: any) => sum + (r.length_meters || 0), 0),
+        routesWithFaults: routes.filter((r: any) => r.status === 'fault').length,
+        totalCableLength: routes.reduce((sum: number, r: any) => sum + (r.length_meters || 0), 0),
+        byType: {
+          Backbone: routes.filter((r: any) => r.route_type === 'Backbone').length,
+          Distribution: routes.filter((r: any) => r.route_type === 'Distribution').length,
+          Access: routes.filter((r: any) => r.route_type === 'Access').length,
+          Drop: routes.filter((r: any) => r.route_type === 'Drop').length,
+        },
+        byStatus: {
+          Completed: routes.filter((r: any) => r.status === 'completed').length,
+          'Under Construction': routes.filter((r: any) => r.status === 'under_construction').length,
+        },
+      };
 
       setNodeStats(nStats);
       setRouteStats(rStats);

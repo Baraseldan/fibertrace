@@ -91,11 +91,52 @@ export function MapScreen() {
 
   useEffect(() => {
     (async () => {
-      const { nodes, lines } = await MapModule.loadAllNetworkLayers();
-      setAllNodes(nodes);
-      setFiberLines(lines);
-      const visibility = await MapModule.getLayerVisibility();
-      setLayerVisibilityState(visibility);
+      try {
+        const { api } = await import('../lib/api');
+        const [nodes, routes, closures, splitters] = await Promise.all([
+          api.getNodes().catch(() => []),
+          api.getRoutes().catch(() => []),
+          api.getClosures().catch(() => []),
+          api.getSplitters().catch(() => []),
+        ]);
+
+        // Transform backend data to map format
+        const mapNodes = [
+          ...nodes.map((n: any) => ({
+            id: n.id?.toString() || '',
+            latitude: n.latitude || 0,
+            longitude: n.longitude || 0,
+            name: n.node_name || 'Node',
+            type: n.node_type?.toLowerCase() || 'node',
+            power: n.power_rating || 0,
+          })),
+          ...closures.map((c: any) => ({
+            id: 'closure-' + c.id?.toString(),
+            latitude: c.latitude || 0,
+            longitude: c.longitude || 0,
+            name: c.closure_name || 'Closure',
+            type: c.closure_type?.toLowerCase() || 'closure',
+            power: 0,
+          })),
+        ];
+
+        const mapLines = routes.map((r: any) => ({
+          id: r.id?.toString() || '',
+          name: r.line_name || 'Route',
+          startLat: r.start_latitude || 0,
+          startLng: r.start_longitude || 0,
+          endLat: r.end_latitude || 0,
+          endLng: r.end_longitude || 0,
+          fiberCount: r.fiber_count || 0,
+        }));
+
+        setAllNodes(mapNodes);
+        setFiberLines(mapLines);
+        const visibility = await MapModule.getLayerVisibility();
+        setLayerVisibilityState(visibility);
+      } catch (error) {
+        console.error('Failed to load map data:', error);
+      }
     })();
   }, []);
 

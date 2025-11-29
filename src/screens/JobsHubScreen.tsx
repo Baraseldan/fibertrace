@@ -55,16 +55,38 @@ export default function JobsHubScreen() {
   const loadJobs = async (): Promise<JobManagement.Job[]> => {
     try {
       setLoading(true);
-      const stored = await AsyncStorage.getItem(JOBS_STORAGE_KEY);
-      let loadedJobs: JobManagement.Job[];
-      if (stored) {
-        loadedJobs = JSON.parse(stored);
-      } else {
-        loadedJobs = createSampleJobs();
-        await AsyncStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(loadedJobs));
+      const { api } = await import('../lib/api');
+      
+      // Try to fetch from backend
+      try {
+        const response = await api.getJobs();
+        const backendJobs = (response.data || response || []).map((j: any) => ({
+          id: j.id?.toString() || Date.now().toString(),
+          name: j.job_name || j.name || 'Unnamed Job',
+          description: j.description || '',
+          status: (j.status || 'pending') as JobManagement.JobStatus,
+          priority: (j.priority || 'Medium') as JobManagement.JobPriority,
+          assignedTo: j.assigned_to || 'tech@company.com',
+          nodeIds: [j.node_id?.toString() || ''],
+          routeIds: [j.route_id?.toString() || ''],
+          date: j.date || new Date().toISOString().split('T')[0],
+          startTime: j.start_time || '09:00',
+          estimatedDuration: j.estimated_duration || 3600,
+          notes: j.notes || '',
+          tags: j.tags || [],
+          estimatedCost: j.estimated_cost || 0,
+          completedTime: j.completed_time,
+          createdAt: j.created_at || new Date().toISOString(),
+        }));
+        setJobs(backendJobs);
+        return backendJobs;
+      } catch (backendError) {
+        console.warn('Backend fetch failed, using local storage:', backendError);
+        const stored = await AsyncStorage.getItem(JOBS_STORAGE_KEY);
+        const loadedJobs = stored ? JSON.parse(stored) : createSampleJobs();
+        setJobs(loadedJobs);
+        return loadedJobs;
       }
-      setJobs(loadedJobs);
-      return loadedJobs;
     } catch (error) {
       Alert.alert('Error', 'Failed to load jobs');
       return [];
