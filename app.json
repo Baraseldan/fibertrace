@@ -5,7 +5,6 @@
     "version": "1.0.0",
     "runtimeVersion": "1.0.0",
     "orientation": "portrait",
-    "icon": "./public/assets/fiber-bg.png",
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./public/assets/fiber-bg.png",
