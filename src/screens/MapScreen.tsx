@@ -16,13 +16,31 @@ import { api } from '../lib/api';
 import { colors } from '../theme/colors';
 import * as MapModule from '../lib/mapModule';
 
-// Stub components for web - mobile-only components with proper typing
-const MapView: React.FC<any> = ({ style }: any) => (
-  <View style={[style, { backgroundColor: colors.background }]} />
-);
-const Marker: React.FC<any> = () => null;
-const Polyline: React.FC<any> = () => null;
-const PROVIDER_GOOGLE = null;
+// Import actual map components for native platforms
+let MapView: any;
+let Marker: any;
+let Polyline: any;
+let PROVIDER_GOOGLE: any;
+
+if (Platform.OS !== 'web') {
+  try {
+    const maps = require('react-native-maps');
+    MapView = maps.default;
+    Marker = maps.Marker;
+    Polyline = maps.Polyline;
+    PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
+  } catch (e) {
+    console.warn('react-native-maps not available, using fallback');
+    MapView = (props: any) => <View style={[props.style, { backgroundColor: colors.background }]} />;
+    Marker = () => null;
+    Polyline = () => null;
+  }
+} else {
+  // Stubs for web
+  MapView = (props: any) => <View style={[props.style, { backgroundColor: colors.background }]} />;
+  Marker = () => null;
+  Polyline = () => null;
+}
 
 const { width, height } = Dimensions.get('window');
 
@@ -40,13 +58,13 @@ interface Node {
 }
 
 export function MapScreen() {
-  // Web and unsupported platforms fallback
+  // Web fallback
   if (Platform.OS === 'web') {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, padding: 20 }}>
-        <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.foreground, marginBottom: 10 }}>Map - Offline Mode</Text>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.foreground, marginBottom: 10 }}>Map - Web Disabled</Text>
         <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: 'center' }}>
-          Maps display infrastructure nodes, routes, and fiber lines. Full interactive features available on native Android/iOS devices.
+          Full interactive maps available on native Android/iOS devices.
         </Text>
       </View>
     );

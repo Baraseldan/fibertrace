@@ -30,7 +30,12 @@
     "android": {
       "package": "com.fibertrace.app",
       "versionCode": 1,
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "INTERNET"]
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "INTERNET"],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDxw7c6B1mBcwbIrYjjgBf3d_7d_8d_8d_8"
+        }
+      }
     },
     "web": {
       "favicon": "./public/assets/fiber-bg.png"
