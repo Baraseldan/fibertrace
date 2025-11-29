@@ -16,10 +16,6 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 5001
-externalPort = 3003
-
-[[ports]]
 localPort = 33997
 externalPort = 3000
 
@@ -50,13 +46,13 @@ args = "FiberTrace Backend"
 name = "FiberTrace Backend"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "bash /home/runner/workspace/backend/start.sh"
-waitForPort = 5001
-
-[workflows.workflow.metadata]
-outputType = "console"
+args = "cd backend && npm install --silent && npm run dev"
+waitForPort = 5000
 
 [agent]
 mockupState = "FULLSTACK"
