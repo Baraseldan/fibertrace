@@ -22,10 +22,12 @@ export function DashboardScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [nodes, routes] = await Promise.all([
-        api.getNodes().catch(() => []),
-        api.getRoutes().catch(() => []),
+      const [nodesRes, routesRes] = await Promise.all([
+        api.getNodes().catch(() => ({ nodes: [] })),
+        api.getRoutes().catch(() => ({ routes: [] })),
       ]);
+      const nodes = nodesRes.nodes || [];
+      const routes = routesRes.routes || [];
 
       // Build stats from real data
       const nStats = {

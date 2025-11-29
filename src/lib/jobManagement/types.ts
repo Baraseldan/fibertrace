@@ -19,8 +19,6 @@ export interface Job {
   duration: number;
   estimatedDuration: number;
   materialRequired: { itemId: string; quantity: number }[];
-  estimatedCost: number;
-  actualCost?: number;
   notes: string;
   inlineNotes: InlineNote[];
   createdAt: string;
@@ -43,7 +41,6 @@ export interface JobStats {
   completedJobs: number;
   cancelledJobs: number;
   totalDurationHours: number;
-  totalCost: number;
   averageCompletionTime: number;
   unsyncedCount: number;
 }

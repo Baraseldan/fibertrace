@@ -8,9 +8,9 @@ const PORT: number = parseInt(process.env.PORT || '5000', 10);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 20,
+  max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000,
 });
 
 app.use(cors());
@@ -293,7 +293,17 @@ async function initDatabase() {
   }
 }
 
-// ============ HEALTH CHECK ============
+// ============ ROOT & HEALTH CHECK ============
+app.get('/', (req: Request, res: Response) => {
+  res.json({ 
+    name: 'FiberTrace API',
+    version: '1.0.0',
+    status: 'running',
+    endpoints: '/api/*',
+    docs: '/health'
+  });
+});
+
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), server: 'FiberTrace Backend' });
 });
@@ -1100,11 +1110,13 @@ app.get('/api/stats', async (req: Request, res: Response) => {
   }
 });
 
-// Initialize database and start server
-initDatabase().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`FiberTrace Backend running on port ${PORT}`);
-    console.log(`API Base: http://0.0.0.0:${PORT}`);
-    console.log(`Database: PostgreSQL connected`);
-  });
+// Start server first, then initialize database
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`FiberTrace Backend running on port ${PORT}`);
+  console.log(`API Base: http://0.0.0.0:${PORT}`);
+  
+  // Initialize database in background
+  initDatabase()
+    .then(() => console.log('Database: PostgreSQL tables ready'))
+    .catch(err => console.error('Database init warning:', err.message));
 });

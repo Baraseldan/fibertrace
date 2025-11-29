@@ -87,50 +87,6 @@ export function getMaterialsForRoute(route: Route): {
 }
 
 /**
- * Estimate total cost for route
- */
-export function estimateRouteCost(route: Route): {
-  cableCost: number;
-  materialsCost: number;
-  laborCost: number;
-  totalEstimate: number;
-} {
-  // Cost estimates (very rough, for planning only)
-  const cableCostPerMeter: Record<string, number> = {
-    'ADSS': 0.15,
-    'G652D': 0.10,
-    'G657A': 0.12,
-    'G657B': 0.11,
-    'Armored': 0.20,
-    'Aerial': 0.14,
-    'Underground': 0.18,
-    'Submarine': 0.50,
-  };
-
-  const materials = getMaterialsForRoute(route);
-  const unitCableCost = cableCostPerMeter[route.inventory.cableType] || 0.12;
-
-  const cableCost = route.inventory.totalLength * unitCableCost;
-  
-  // Materials cost estimate
-  const materialsCost = 
-    materials.closures * 50 +
-    materials.connectors * 15 +
-    materials.spliceProtectors * 3 +
-    materials.heatShrink * 0.50;
-
-  // Labor cost estimate (rough: $50/hour, ~100m per hour)
-  const laborCost = (route.totalDistance / 100) * 50;
-
-  return {
-    cableCost,
-    materialsCost,
-    laborCost,
-    totalEstimate: cableCost + materialsCost + laborCost,
-  };
-}
-
-/**
  * Generate inventory report for multiple routes
  */
 export function generateInventoryReport(routes: Route[]): {
@@ -139,32 +95,23 @@ export function generateInventoryReport(routes: Route[]): {
   totalSplices: number;
   totalClosures: number;
   totalLength: number;
-  costEstimate: number;
 } {
   const totalCableByType: Record<string, number> = {};
   const totalCableByCableSize: Record<string, number> = {};
   let totalSplices = 0;
   let totalClosures = 0;
   let totalLength = 0;
-  let costEstimate = 0;
 
   routes.forEach(route => {
-    // Cable by type
     totalCableByType[route.inventory.cableType] = 
       (totalCableByType[route.inventory.cableType] || 0) + route.inventory.totalLength;
 
-    // Cable by size
     totalCableByCableSize[route.inventory.cableSize] = 
       (totalCableByCableSize[route.inventory.cableSize] || 0) + route.inventory.totalLength;
 
-    // Totals
     totalSplices += route.inventory.spliceCount;
     totalClosures += Math.ceil(route.segments.length / 5);
     totalLength += route.inventory.totalLength;
-
-    // Cost
-    const cost = estimateRouteCost(route);
-    costEstimate += cost.totalEstimate;
   });
 
   return {
@@ -173,7 +120,6 @@ export function generateInventoryReport(routes: Route[]): {
     totalSplices,
     totalClosures,
     totalLength,
-    costEstimate,
   };
 }
 

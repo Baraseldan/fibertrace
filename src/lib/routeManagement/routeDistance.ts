@@ -151,30 +151,13 @@ export function getCableMetrics(route: Route): {
   routeDistance: number;
   totalCableLength: number;
   reserve: number;
-  costEstimate: number; // Rough estimate based on cable type
 } {
-  // Very rough cost estimates per meter
-  const costPerMeter: Record<string, number> = {
-    'ADSS': 0.15,
-    'G652D': 0.10,
-    'G657A': 0.12,
-    'G657B': 0.11,
-    'Armored': 0.20,
-    'Aerial': 0.14,
-    'Underground': 0.18,
-    'Submarine': 0.50,
-  };
-
-  const unitCost = costPerMeter[route.inventory.cableType] || 0.12;
-  const costEstimate = route.inventory.totalLength * unitCost;
-
   return {
     cableType: route.inventory.cableType,
     cableSize: route.inventory.cableSize,
     routeDistance: route.totalDistance,
     totalCableLength: route.inventory.totalLength,
     reserve: route.inventory.reserve,
-    costEstimate,
   };
 }
 

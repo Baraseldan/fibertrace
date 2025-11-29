@@ -2,6 +2,33 @@
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
 
 export const api = {
+  // ===== AUTHENTICATION =====
+  async login(email: string, password_hash: string) {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password_hash }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Login failed' }));
+      throw new Error(error.error || 'Login failed');
+    }
+    return res.json();
+  },
+
+  async register(data: { full_name: string; email: string; phone?: string; password_hash: string; role?: string }) {
+    const res = await fetch(`${API_BASE}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Registration failed' }));
+      throw new Error(error.error || 'Registration failed');
+    }
+    return res.json();
+  },
+
   // ===== NODES =====
   async getNodes() {
     const res = await fetch(`${API_BASE}/api/nodes`);
@@ -241,6 +268,89 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Failed to update user profile');
+    return res.json();
+  },
+
+  // ===== INVENTORY =====
+  async getInventory() {
+    const res = await fetch(`${API_BASE}/api/inventory`);
+    if (!res.ok) throw new Error('Failed to fetch inventory');
+    return res.json();
+  },
+
+  async createInventoryItem(data: any) {
+    const res = await fetch(`${API_BASE}/api/inventory`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create inventory item');
+    return res.json();
+  },
+
+  async updateInventoryItem(id: number, data: any) {
+    const res = await fetch(`${API_BASE}/api/inventory/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update inventory item');
+    return res.json();
+  },
+
+  // ===== CUSTOMERS =====
+  async getCustomers() {
+    const res = await fetch(`${API_BASE}/api/customers`);
+    if (!res.ok) throw new Error('Failed to fetch customers');
+    return res.json();
+  },
+
+  async createCustomer(data: any) {
+    const res = await fetch(`${API_BASE}/api/customers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create customer');
+    return res.json();
+  },
+
+  async updateCustomer(id: number, data: any) {
+    const res = await fetch(`${API_BASE}/api/customers/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update customer');
+    return res.json();
+  },
+
+  // ===== SPLICES =====
+  async getSplices(closureId?: number) {
+    const url = closureId ? `${API_BASE}/api/splices?closure_id=${closureId}` : `${API_BASE}/api/splices`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to fetch splices');
+    return res.json();
+  },
+
+  async createSplice(data: any) {
+    const res = await fetch(`${API_BASE}/api/splices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create splice');
+    return res.json();
+  },
+
+  // ===== SYNC =====
+  async syncData(data: any) {
+    const res = await fetch(`${API_BASE}/api/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to sync data');
     return res.json();
   },
 };

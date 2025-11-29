@@ -51,7 +51,6 @@ export function sortJobs(jobs: Job[], field: 'date' | 'priority' | 'status' | 'd
 
 export function getJobStats(jobs: Job[]): JobStats {
   const totalDuration = jobs.reduce((acc, job) => acc + (job.duration || 0), 0);
-  const totalCost = jobs.reduce((acc, job) => acc + (job.actualCost || job.estimatedCost), 0);
   const completedJobs = jobs.filter(j => j.status === 'Completed');
   const avgCompletion = completedJobs.length > 0
     ? completedJobs.reduce((acc, job) => acc + (job.estimatedDuration || 0), 0) / completedJobs.length
@@ -64,7 +63,6 @@ export function getJobStats(jobs: Job[]): JobStats {
     completedJobs: completedJobs.length,
     cancelledJobs: jobs.filter(j => j.status === 'Cancelled').length,
     totalDurationHours: totalDuration,
-    totalCost,
     averageCompletionTime: avgCompletion,
     unsyncedCount: jobs.filter(j => j.unsyncedChanges).length,
   };
