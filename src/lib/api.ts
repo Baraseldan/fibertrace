@@ -232,4 +232,15 @@ export const api = {
     if (!res.ok) throw new Error('Failed to save GPS log');
     return res.json();
   },
+
+  // ===== USER PROFILE =====
+  async updateUserProfile(userId: number, data: any) {
+    const res = await fetch(`${API_BASE}/api/users/${userId}/profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update user profile');
+    return res.json();
+  },
 };

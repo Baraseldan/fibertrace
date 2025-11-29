@@ -247,4 +247,5 @@ const styles = StyleSheet.create({
   exportButtonDesc: { fontSize: 11, color: colors.mutedForeground, marginTop: 2 },
   generateButton: { backgroundColor: colors.primary, borderRadius: 8, padding: 12, marginBottom: 24 },
   generateButtonText: { color: colors.background, fontWeight: '600', textAlign: 'center' },
+  emptyText: { fontSize: 13, color: colors.mutedForeground, textAlign: 'center', paddingVertical: 12 },
 });

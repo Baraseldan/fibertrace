@@ -1,0 +1,586 @@
+Nice — below is a single answer containing three things you asked for, tightly integrated so a dev (or an AI generator) can implement the system:
+
+1. End-to-end MAP & CHAIN WORKFLOW LOGIC (how the system behaves)
+
+
+2. ERD / Database design (tables, keys, important columns, relationships)
+
+
+3. Core functionality & example SQL + pseudocode (API-like operations, key queries, power-propagation pseudocode, sync/conflict rules, report generation)
+
+
+
+I kept field types SQLite-friendly and included concrete examples you can paste into a mobile app/backend design doc.
+
+
+---
+
+A — FULL WORKFLOW LOGIC (Map + Chain + Power + Reports + Sync)
+
+1. Startup & Map loading
+
+App opens → load local DB → load offline map tiles.
+
+Rebuild the network graph from nodes, closures, splitters, fiber_lines and links.
+
+Center map on GPS or last view.
+
+
+2. Add / Edit asset (node, closure, splitter, ATB, FAT, OLT)
+
+User chooses asset type → supply metadata (id/label, coords, parent link, capacity, photos, notes).
+
+System:
+
+Validate parent if provided.
+
+Assign unique local id and created_at.
+
+Save to local DB as unsynced.
+
+Update chain graph and redraw map.
+
+
+
+3. Draw / Save fiber route
+
+Methods:
+
+Manual polyline (tap points).
+
+GPS trace (record device location as user walks).
+
+
+System calculates distances (Haversine for pairs; sum for polyline), applies slack %, stores route record and route_segments for per-segment geometry.
+
+Link route to start/end assets (nodes/closures).
+
+
+4. Chain creation & linking
+
+Every new asset prompts: “which parent/connected asset(s)?”
+
+System stores directed links (parent→child) in links table.
+
+Chain graph is used for traversal, path queries, and power propagation.
+
+
+5. Power entry & propagation
+
+When power IN at a node is entered (manual or via Bluetooth meter/OTDR):
+
+Compute splitter losses, splice losses, cable attenuation per km.
+
+Propagate forward through linked children using BFS/DFS in chain order.
+
+Update power_readings per node with timestamp and source (manual/BLE).
+
+Mark nodes out of spec (color codes) for UI alert.
+
+
+
+6. Bluetooth/OTDR integration
+
+App scans BLE devices. On connect receives reading JSON (device, fiber_id, dBm, splice_loss, quality, timestamp).
+
+Map reading → find linked asset by fiber_id, MAC, or user selection → store meter_readings and trigger power propagation.
+
+
+7. Chain saving & continuous view
+
+Every change updates the chain graph in-memory and is persisted.
+
+The continuous map view is rebuilt from the graph on every commit so it always reflects the current network.
+
+
+8. Reporting (daily & chain reports)
+
+Daily job report compiles:
+
+Jobs completed, new nodes added, routes added, meter readings, inventory used, photos.
+
+
+Chain report for a selected OLT→endpoint:
+
+Ordered sequence of nodes, distances, segment losses, per-node power IN/OUT, splice events, photos.
+
+
+Output formats: PDF/CSV/JSON; snapshot image of map included.
+
+
+9. Offline-first & Sync
+
+All user actions create records flagged sync_state = {pending, synced, conflict}.
+
+When online:
+
+Upload local pending items in sequence (users → assets → routes → readings → reports).
+
+Server returns authoritative IDs and timestamps.
+
+Merge with server updates using updated_at and last_modified_by.
+
+Conflict resolution: prefer latest updated_at; if both edited, create local conflict record and prompt user to resolve.
+
+
+
+
+---
+
+B — ERD / DATABASE DESIGN (SQLite style)
+
+Below: table name — columns (type) — notes. PK = primary key, FK = foreign key.
+
+Core tables
+
+users
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+full_name TEXT
+
+email TEXT UNIQUE
+
+phone TEXT
+
+password_hash TEXT
+
+role TEXT  — ('technician','lead','manager')
+
+created_at DATETIME
+
+last_login DATETIME
+
+
+nodes  — (general nodes: OLT, node, power node)
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+external_id TEXT NULL — server id mapping
+
+label TEXT
+
+type TEXT — ('OLT','Node','PowerNode','Pole','ODF','Core')
+
+latitude REAL
+
+longitude REAL
+
+elevation REAL NULL
+
+power_in_dbm REAL NULL
+
+power_out_dbm REAL NULL
+
+status TEXT — ('ok','warning','fault')
+
+created_by INTEGER FK→users(id)
+
+created_at DATETIME
+
+updated_at DATETIME
+
+sync_state TEXT — ('pending','synced','conflict')
+
+
+closures
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+label TEXT
+
+closure_type TEXT — ('ATB','FAT','DOME','INLINE','FDB','ODF')
+
+latitude REAL
+
+longitude REAL
+
+capacity_total INTEGER
+
+capacity_used INTEGER
+
+parent_node_id INTEGER FK→nodes(id) NULL
+
+created_at DATETIME
+
+updated_at DATETIME
+
+sync_state TEXT
+
+
+splitters
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+label TEXT
+
+ratio TEXT — e.g., '1:8'
+
+insertion_loss_db REAL
+
+host_type TEXT — ('node','closure')
+
+host_id INTEGER — FK to nodes.id or closures.id
+
+created_at DATETIME
+
+
+fiber_lines
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+label TEXT
+
+fiber_count INTEGER
+
+cable_type TEXT
+
+length_m REAL
+
+start_type TEXT — ('node','closure','splitter')
+
+start_id INTEGER
+
+end_type TEXT
+
+end_id INTEGER
+
+created_at DATETIME
+
+updated_at DATETIME
+
+sync_state TEXT
+
+
+route_segments
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+fiber_line_id INTEGER FK→fiber_lines(id)
+
+sequence INTEGER
+
+lat REAL
+
+lon REAL
+
+
+links  — directed edges in the chain graph
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+from_type TEXT — ('node','closure','splitter')
+
+from_id INTEGER
+
+to_type TEXT
+
+to_id INTEGER
+
+port_info TEXT NULL — port numbers / fiber core mapping
+
+created_at DATETIME
+
+
+meter_readings
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+device_name TEXT
+
+device_mac TEXT NULL
+
+reading_type TEXT — ('dBm','splice_loss','otdr_event')
+
+reading_value REAL
+
+unit TEXT
+
+linked_type TEXT — ('node','closure','splitter','fiber_line')
+
+linked_id INTEGER
+
+quality REAL NULL
+
+timestamp DATETIME
+
+recorded_by INTEGER FK→users(id)
+
+sync_state TEXT
+
+
+jobs
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+job_code TEXT
+
+title TEXT
+
+job_type TEXT — ('install','repair','splice','survey')
+
+assigned_to INTEGER FK→users(id)
+
+asset_type TEXT — target asset type
+
+asset_id INTEGER — id in that asset table
+
+status TEXT — ('pending','in_progress','completed')
+
+started_at DATETIME
+
+completed_at DATETIME
+
+created_at DATETIME
+
+sync_state TEXT
+
+
+job_actions
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+job_id INTEGER FK→jobs(id)
+
+action_type TEXT
+
+description TEXT
+
+photo_path TEXT NULL
+
+gps_lat REAL NULL
+
+gps_lon REAL NULL
+
+timestamp DATETIME
+
+
+daily_reports
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+user_id INTEGER FK→users(id)
+
+date DATE
+
+summary TEXT
+
+total_jobs INTEGER
+
+total_distance_m REAL
+
+created_at DATETIME
+
+sync_state TEXT
+
+
+map_tiles
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+zoom INTEGER
+
+tile_x INTEGER
+
+tile_y INTEGER
+
+image_blob BLOB
+
+last_updated DATETIME
+
+
+gps_logs
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+user_id INTEGER FK→users(id)
+
+latitude REAL
+
+longitude REAL
+
+timestamp DATETIME
+
+linked_job_id INTEGER NULL
+
+
+files
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+path TEXT
+
+linked_type TEXT
+
+linked_id INTEGER
+
+uploaded_by INTEGER FK→users(id)
+
+timestamp DATETIME
+
+
+asset_updates (audit)
+
+id INTEGER PRIMARY KEY AUTOINCREMENT
+
+asset_type TEXT
+
+asset_id INTEGER
+
+user_id INTEGER
+
+change_summary TEXT
+
+old_value TEXT
+
+new_value TEXT
+
+timestamp DATETIME
+
+
+
+---
+
+Relationships (short)
+
+users → many jobs, meter_readings, daily_reports, job_actions, asset_updates.
+
+nodes ←→ closures via parent_node_id and links.
+
+fiber_lines composed of many route_segments.
+
+links represent directed edges between any two asset types.
+
+
+
+---
+
+C — CORE FUNCTIONALITY: APIs / SQL / PSEUDOCODE
+
+Below are core operations a developer will need, with example SQL and pseudocode.
+
+1. Create node (SQL)
+
+INSERT INTO nodes(label,type,latitude,longitude,power_in_dbm,created_by,created_at,sync_state)
+VALUES('FAT-03','FAT', -1.2921, 36.8219, NULL, 2, CURRENT_TIMESTAMP, 'pending');
+
+2. Save polyline segment (SQL)
+
+INSERT INTO route_segments(fiber_line_id, sequence, lat, lon)
+VALUES(10, 1, -1.2921, 36.8219);
+
+3. Build chain graph (query)
+
+Get neighbors of a node:
+
+SELECT * FROM links WHERE (from_type='node' AND from_id=?)
+UNION
+SELECT * FROM links WHERE (to_type='node' AND to_id=?);
+
+4. Compute distance (Haversine pseudocode)
+
+function haversine(lat1,lon1,lat2,lon2):
+    R = 6371000  # meters
+    dLat = radians(lat2-lat1)
+    dLon = radians(lon2-lon1)
+    a = sin(dLat/2)^2 + cos(radians(lat1))*cos(radians(lat2)) * sin(dLon/2)^2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    return R * c
+
+5. Power propagation pseudocode
+
+function propagatePower(startNodeId):
+    queue = [startNodeId]
+    visited = set()
+    while queue not empty:
+        node = queue.pop(0)
+        visited.add(node)
+        children = getChildren(node)  # read from links where from= node
+        for child in children:
+            loss = computeLoss(node, child)  # cable attenuation + splitter + splice losses
+            child.power_in = node.power_out
+            child.power_out = child.power_in - loss
+            savePowerReading(child.id, child.power_in, child.power_out)
+            if child not in visited: queue.append(child)
+
+computeLoss(node, child) aggregates:
+
+splitter insertion loss (if node is splitter)
+
+per-meter attenuation = attenuation_coefficient * (segment_length_km)
+
+connector/splice loss (from meter_readings or default constants)
+
+
+6. Chain report generation (high level)
+
+Input: start_asset and end_asset or start_asset + depth until endpoints.
+
+Query graph to produce ordered list: for each node get label, type, lat, lon, distance_from_prev, power_in, power_out, last_reading_timestamp, photos[].
+
+Render to PDF with map snapshot and table.
+
+
+7. Sync algorithm (sketch)
+
+When online:
+
+1. Upload users changes first, then nodes, closures, splitters, fiber_lines, route_segments, links, meter_readings, jobs, job_actions, daily_reports, files.
+
+
+2. For each uploaded record server returns server_id and server_updated_at. Update local external_id and set sync_state='synced'.
+
+
+3. Fetch server changes since last_sync_at.
+
+
+4. For conflicting edits (same record modified local & server), create asset_updates conflict entry and mark local sync_state='conflict' and prompt the user for resolution.
+
+
+
+Use optimistic locking via updated_at timestamps.
+
+
+8. Sample key queries
+
+Find chain from OLT to a specific home drop (breadth-first), returning path and cumulative loss:
+
+This is better done in application logic reading links table and building the path.
+
+
+
+9. Indexing recommendations (SQLite)
+
+Index nodes(latitude, longitude) for geo queries.
+
+Index links(from_type, from_id) and links(to_type, to_id) for fast traversal.
+
+Index meter_readings(linked_type, linked_id, timestamp) for retrieving latest readings.
+
+
+
+---
+
+D — CORE FUNCTIONALITY MODULES (Summary list)
+
+Authentication & User management (offline token cache)
+
+Map & Tile Manager (offline tile loader, renderer, zoom)
+
+Node/Closure Manager (CRUD + audit)
+
+Route/Segment Manager (draw, save, GPS trace)
+
+Link & Chain Engine (graph builder, traversal, splitting/joining nodes)
+
+Power Engine (compute losses, propagate values)
+
+Bluetooth Manager (BLE scanning, parse readings, match to asset)
+
+Job & Daily Report Manager (job lifecycle, PDF export)
+
+Inventory Manager (stock, allocations)
+
+Sync Engine (upload queue, conflict resolution)
+
+File Manager (photos,

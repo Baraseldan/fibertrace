@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, Alert, Platform, TextInput } from 'react-native';
 import { colors } from '../theme/colors';
 import * as Notifications from '@/lib/pushNotifications';
 import * as AuthStorage from '../lib/authStorage';
@@ -252,23 +252,53 @@ function ProfileTab({ onLogout }: { onLogout?: () => void }) {
     id: 'unknown',
     name: 'Technician',
     email: 'user@fibertrace.app',
+    phone: '',
     role: 'Technician',
   });
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [saving, setSaving] = useState(false);
 
   React.useEffect(() => {
-    const loadUser = async () => {
-      const savedUser = await AuthStorage.getStoredUser();
-      if (savedUser) {
-        setUser({
-          id: savedUser.id?.toString() || 'unknown',
-          name: savedUser.full_name || 'Technician',
-          email: savedUser.email,
-          role: savedUser.role || 'Technician',
-        });
-      }
-    };
     loadUser();
   }, []);
+
+  const loadUser = async () => {
+    const savedUser = await AuthStorage.getStoredUser();
+    if (savedUser) {
+      const userData = {
+        id: savedUser.id?.toString() || 'unknown',
+        name: savedUser.full_name || 'Technician',
+        email: savedUser.email,
+        phone: savedUser.phone || '',
+        role: savedUser.role || 'Technician',
+      };
+      setUser(userData);
+      setEditName(userData.name);
+      setEditPhone(userData.phone);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    try {
+      const savedUser = await AuthStorage.getStoredUser();
+      if (savedUser?.id) {
+        await api.updateUserProfile(savedUser.id, {
+          full_name: editName,
+          phone: editPhone,
+        });
+        setUser({ ...user, name: editName, phone: editPhone });
+        setEditing(false);
+        Alert.alert('✓ Profile Updated', 'Your profile has been saved successfully');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save profile');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleLogout = async () => {
     Alert.alert(
@@ -303,16 +333,58 @@ function ProfileTab({ onLogout }: { onLogout?: () => void }) {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account Details</Text>
-        <InfoRow label="Email" value={user.email} />
-        <InfoRow label="Role" value={user.role} />
-        <InfoRow label="ID" value={user.id} />
-      </View>
+      {!editing ? (
+        <>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Account Details</Text>
+            <InfoRow label="Email" value={user.email} />
+            <InfoRow label="Phone" value={user.phone || 'Not set'} />
+            <InfoRow label="Role" value={user.role} />
+            <InfoRow label="ID" value={user.id} />
+          </View>
+
+          <View style={styles.section}>
+            <TouchableOpacity style={styles.profileActionButton} onPress={() => setEditing(true)}>
+              <Text style={[styles.profileActionButtonText, { color: colors.primary }]}>✏️ Edit Profile</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Edit Profile</Text>
+          <View style={styles.editField}>
+            <Text style={styles.editLabel}>Full Name</Text>
+            <TextInput
+              value={editName}
+              onChangeText={setEditName}
+              style={styles.editInput}
+              placeholderTextColor={colors.mutedForeground}
+            />
+          </View>
+          <View style={styles.editField}>
+            <Text style={styles.editLabel}>Phone</Text>
+            <TextInput
+              value={editPhone}
+              onChangeText={setEditPhone}
+              style={styles.editInput}
+              placeholderTextColor={colors.mutedForeground}
+              keyboardType="phone-pad"
+            />
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={[styles.profileActionButton, { flex: 1 }]} onPress={() => setEditing(false)}>
+              <Text style={[styles.profileActionButtonText]}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.profileActionButton, { flex: 1, backgroundColor: colors.primary }]} onPress={handleSaveProfile} disabled={saving}>
+              <Text style={[styles.profileActionButtonText, { color: colors.background }]}>{saving ? '...' : 'Save'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       <View style={styles.section}>
         <TouchableOpacity style={styles.profileActionButton} onPress={handleLogout}>
-          <Text style={[styles.profileActionButtonText, { color: colors.destructive }]}>Logout</Text>
+          <Text style={[styles.profileActionButtonText, { color: colors.destructive }]}>🚪 Logout</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -407,4 +479,7 @@ const styles = StyleSheet.create({
   freqButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   freqText: { fontSize: 11, color: colors.foreground },
   freqTextActive: { color: colors.background, fontWeight: '600' },
+  editField: { marginBottom: 12 },
+  editLabel: { fontSize: 12, fontWeight: '600', color: colors.foreground, marginBottom: 6 },
+  editInput: { borderWidth: 1, borderColor: colors.border, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 8, color: colors.foreground, backgroundColor: colors.card },
 });
