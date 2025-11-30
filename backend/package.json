@@ -5,7 +5,8 @@
   "main": "server.ts",
   "scripts": {
     "start": "tsx server.ts",
-    "dev": "NODE_ENV=development tsx server.ts"
+    "dev": "NODE_ENV=development tsx server.ts",
+    "test": "tsx test.ts"
   },
   "type": "module",
   "dependencies": {
@@ -16,6 +17,7 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
+    "node-fetch": "^3.3.2",
     "pg": "^8.16.3",
     "uuid": "^9.0.1"
   },
