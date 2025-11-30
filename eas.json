@@ -6,11 +6,10 @@
     "production": {
       "android": {
         "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease"
+        "ndk": "25.2.9519653"
       },
       "env": {
-        "npm_config_legacy_peer_deps": "true",
-        "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64"
+        "npm_config_legacy_peer_deps": "true"
       }
     },
     "preview": {
@@ -18,8 +17,7 @@
         "buildType": "apk"
       },
       "env": {
-        "npm_config_legacy_peer_deps": "true",
-        "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64"
+        "npm_config_legacy_peer_deps": "true"
       }
     }
   }
