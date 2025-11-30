@@ -687,6 +687,53 @@ app.put('/api/splitters/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Power calculation endpoint
+app.post('/api/power/calculate', async (req: Request, res: Response) => {
+  try {
+    const { routeId, inputPowerDbm = 0, splitterLoss = 0.5, cableAttenuationDbPerKm = 0.35, fiberLength = 0 } = req.body;
+    
+    // Get route with closures and splices
+    const routeResult = await pool.query(
+      'SELECT * FROM closures WHERE route_id = $1 ORDER BY created_at ASC',
+      [routeId]
+    );
+    
+    const nodes: any[] = [];
+    let currentPower = inputPowerDbm;
+    
+    for (const closure of routeResult.rows) {
+      // Cable attenuation based on distance
+      const spliceCount = await pool.query('SELECT COUNT(*) as count FROM splices WHERE closure_id = $1', [closure.id]);
+      const spliceAttenuation = (spliceCount.rows[0].count || 0) * 0.1; // 0.1dB per splice
+      
+      currentPower = currentPower - (cableAttenuationDbPerKm * (fiberLength / 1000)) - spliceAttenuation;
+      
+      nodes.push({
+        id: closure.id,
+        name: closure.closure_name,
+        powerDbm: parseFloat(currentPower.toFixed(2)),
+        alert: currentPower < -20 ? 'LOW_POWER' : null
+      });
+      
+      if (closure.closure_type.includes('Splitter') || closure.closure_type.includes('1x')) {
+        currentPower = currentPower - splitterLoss;
+      }
+    }
+    
+    const alerts = nodes.filter(n => n.alert).map(n => ({ nodeId: n.id, type: n.alert }));
+    
+    res.json({ 
+      success: true,
+      nodes, 
+      alerts,
+      inputPower: inputPowerDbm,
+      calculatedAt: new Date().toISOString()
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ SPLICES ENDPOINTS ============
 app.get('/api/splices', async (req: Request, res: Response) => {
   try {
@@ -714,6 +761,50 @@ app.post('/api/splices', async (req: Request, res: Response) => {
       [closure_id, fiber_in, fiber_out, tube_in, tube_out, color_in, color_out, splice_type || 'fusion', loss_reading, status || 'good', notes, created_by]
     );
     res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Closure splices endpoints
+app.get('/api/closures/:id/splices', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('SELECT * FROM splices WHERE closure_id = $1 ORDER BY created_at DESC', [id]);
+    res.json({ splices: result.rows, count: result.rows.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/closures/:id/splices', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { fiber_in, fiber_out, tube_in, tube_out, color_in, color_out, splice_type, loss_reading, notes, created_by } = req.body;
+    const result = await pool.query(
+      `INSERT INTO splices (closure_id, fiber_in, fiber_out, tube_in, tube_out, color_in, color_out, splice_type, loss_reading, notes, created_by) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [id, fiber_in, fiber_out, tube_in, tube_out, color_in, color_out, splice_type || 'fusion', loss_reading, notes, created_by]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/splices/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { fiber_in, fiber_out, color_in, color_out, loss_reading, status, notes } = req.body;
+    const result = await pool.query(
+      `UPDATE splices SET fiber_in = COALESCE($1, fiber_in), fiber_out = COALESCE($2, fiber_out), 
+       color_in = COALESCE($3, color_in), color_out = COALESCE($4, color_out), 
+       loss_reading = COALESCE($5, loss_reading), status = COALESCE($6, status), notes = COALESCE($7, notes) 
+       WHERE id = $8 RETURNING *`,
+      [fiber_in, fiber_out, color_in, color_out, loss_reading, status, notes, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Splice not found' });
+    res.json(result.rows[0]);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1199,4 +1290,60 @@ app.listen(PORT, '0.0.0.0', () => {
     })
     .then(() => console.log('Uploads table initialized'))
     .catch(err => console.error('Database init warning:', err.message));
+});
+
+// Job logging endpoint
+app.post('/api/jobs/:id/log', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { action, details, photos, splicesDone } = req.body;
+    
+    // Create a job_logs table if needed
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS job_logs_v2 (
+        id SERIAL PRIMARY KEY,
+        job_id INTEGER REFERENCES jobs(id),
+        action VARCHAR(100),
+        details JSONB,
+        photos JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    
+    const result = await pool.query(
+      'INSERT INTO job_logs_v2 (job_id, action, details, photos) VALUES ($1, $2, $3, $4) RETURNING *',
+      [id, action, JSON.stringify(details || {}), JSON.stringify(photos || [])]
+    );
+    
+    if (splicesDone) {
+      await pool.query('UPDATE jobs SET splices_done = splices_done + $1 WHERE id = $2', [splicesDone, id]);
+    }
+    
+    res.status(201).json({ success: true, log: result.rows[0] });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Inventory assign endpoint
+app.post('/api/inventory/assign', async (req: Request, res: Response) => {
+  try {
+    const { itemId, userId, jobId } = req.body;
+    
+    const inventoryResult = await pool.query(
+      'UPDATE inventory SET assigned_to = $1, status = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
+      [userId, 'assigned', itemId]
+    );
+    
+    if (userId && jobId) {
+      await pool.query(
+        'INSERT INTO tool_usage_logs (inventory_id, user_id, job_id, action) VALUES ($1, $2, $3, $4)',
+        [itemId, userId, jobId, 'assigned']
+      );
+    }
+    
+    res.json({ success: true, inventory: inventoryResult.rows[0] });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });

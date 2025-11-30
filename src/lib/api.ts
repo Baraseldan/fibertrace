@@ -151,46 +151,6 @@ export const api = {
     return res.json();
   },
 
-  // ===== CLOSURES (FAT, ATB, Dome, etc.) =====
-  async getClosures() {
-    const res = await fetch(`${API_BASE}/api/closures`);
-    if (!res.ok) throw new Error('Failed to fetch closures');
-    return res.json();
-  },
-
-  async getClosure(id: number) {
-    const res = await fetch(`${API_BASE}/api/closures/${id}`);
-    if (!res.ok) throw new Error('Failed to fetch closure');
-    return res.json();
-  },
-
-  async createClosure(data: any) {
-    const res = await fetch(`${API_BASE}/api/closures`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Failed to create closure');
-    return res.json();
-  },
-
-  // ===== SPLITTERS =====
-  async getSplitters() {
-    const res = await fetch(`${API_BASE}/api/splitters`);
-    if (!res.ok) throw new Error('Failed to fetch splitters');
-    return res.json();
-  },
-
-  async createSplitter(data: any) {
-    const res = await fetch(`${API_BASE}/api/splitters`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Failed to create splitter');
-    return res.json();
-  },
-
   // ===== ROUTES =====
   async getRoutes() {
     const res = await fetch(`${API_BASE}/api/routes`);
@@ -214,20 +174,102 @@ export const api = {
     return res.json();
   },
 
-  // ===== POWER READINGS =====
-  async getPowerReadings() {
-    const res = await fetch(`${API_BASE}/api/power-readings`);
-    if (!res.ok) throw new Error('Failed to fetch power readings');
+  async updateRoute(id: number, data: any) {
+    const res = await fetch(`${API_BASE}/api/routes/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update route');
     return res.json();
   },
 
-  async createPowerReading(data: any) {
-    const res = await fetch(`${API_BASE}/api/power-readings`, {
+  // ===== CLOSURES =====
+  async getClosures() {
+    const res = await fetch(`${API_BASE}/api/closures`);
+    if (!res.ok) throw new Error('Failed to fetch closures');
+    return res.json();
+  },
+
+  async getClosure(id: number) {
+    const res = await fetch(`${API_BASE}/api/closures/${id}`);
+    if (!res.ok) throw new Error('Failed to fetch closure');
+    return res.json();
+  },
+
+  async createClosure(data: any) {
+    const res = await fetch(`${API_BASE}/api/closures`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error('Failed to create power reading');
+    if (!res.ok) throw new Error('Failed to create closure');
+    return res.json();
+  },
+
+  async updateClosure(id: number, data: any) {
+    const res = await fetch(`${API_BASE}/api/closures/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update closure');
+    return res.json();
+  },
+
+  // ===== CLOSURE SPLICES =====
+  async getClosureSplices(closureId: number) {
+    const res = await fetch(`${API_BASE}/api/closures/${closureId}/splices`);
+    if (!res.ok) throw new Error('Failed to fetch closure splices');
+    return res.json();
+  },
+
+  async createClosureSplice(closureId: number, data: any) {
+    const res = await fetch(`${API_BASE}/api/closures/${closureId}/splices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create closure splice');
+    return res.json();
+  },
+
+  // ===== SPLICES =====
+  async getSplices(closureId?: number) {
+    const url = closureId ? `${API_BASE}/api/splices?closure_id=${closureId}` : `${API_BASE}/api/splices`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to fetch splices');
+    return res.json();
+  },
+
+  async createSplice(data: any) {
+    const res = await fetch(`${API_BASE}/api/splices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to create splice');
+    return res.json();
+  },
+
+  async updateSplice(spliceId: number, data: any) {
+    const res = await fetch(`${API_BASE}/api/splices/${spliceId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update splice');
+    return res.json();
+  },
+
+  // ===== POWER CALCULATION =====
+  async calculatePower(data: any) {
+    const res = await fetch(`${API_BASE}/api/power/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to calculate power');
     return res.json();
   },
 
@@ -264,117 +306,13 @@ export const api = {
     return res.json();
   },
 
-  async updateJobStatus(id: number, status: string) {
-    const res = await fetch(`${API_BASE}/api/jobs/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    if (!res.ok) throw new Error('Failed to update job status');
-    return res.json();
-  },
-
-  async deleteJob(id: number) {
-    const res = await fetch(`${API_BASE}/api/jobs/${id}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) throw new Error('Failed to delete job');
-    return res.json();
-  },
-
-  // ===== REPORTS & STATS =====
-  async getStats() {
-    const res = await fetch(`${API_BASE}/api/stats`);
-    if (!res.ok) throw new Error('Failed to fetch stats');
-    return res.json();
-  },
-
-  async getDailyReports() {
-    const res = await fetch(`${API_BASE}/api/daily-reports`);
-    if (!res.ok) throw new Error('Failed to fetch daily reports');
-    return res.json();
-  },
-
-  async createDailyReport(data: any) {
-    const res = await fetch(`${API_BASE}/api/daily-reports`, {
+  async logJobAction(jobId: number, data: any) {
+    const res = await fetch(`${API_BASE}/api/jobs/${jobId}/log`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error('Failed to create daily report');
-    return res.json();
-  },
-
-  // ===== FAT PORTS =====
-  async getFatPorts() {
-    const res = await fetch(`${API_BASE}/api/fat-ports`);
-    if (!res.ok) throw new Error('Failed to fetch FAT ports');
-    return res.json();
-  },
-
-  async createFatPort(data: any) {
-    const res = await fetch(`${API_BASE}/api/fat-ports`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Failed to create FAT port');
-    return res.json();
-  },
-
-  // ===== USER SETTINGS =====
-  async getUserSettings(userId: number) {
-    const res = await fetch(`${API_BASE}/api/users/${userId}/settings`);
-    if (!res.ok) throw new Error('Failed to fetch user settings');
-    return res.json();
-  },
-
-  async updateUserSettings(userId: number, settings: any) {
-    const res = await fetch(`${API_BASE}/api/users/${userId}/settings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings),
-    });
-    if (!res.ok) throw new Error('Failed to update user settings');
-    return res.json();
-  },
-
-  // ===== METER READINGS (Bluetooth Integration) =====
-  async getMeterReadings() {
-    const res = await fetch(`${API_BASE}/api/meter-readings`);
-    if (!res.ok) throw new Error('Failed to fetch meter readings');
-    return res.json();
-  },
-
-  async saveMeterReading(data: any) {
-    const res = await fetch(`${API_BASE}/api/meter-readings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Failed to save meter reading');
-    return res.json();
-  },
-
-  // ===== GPS LOGS =====
-  async saveGpsLog(data: any) {
-    const res = await fetch(`${API_BASE}/api/gps-logs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Failed to save GPS log');
-    return res.json();
-  },
-
-  // ===== USER PROFILE =====
-  async updateUserProfile(userId: number, data: any) {
-    const res = await fetch(`${API_BASE}/api/users/${userId}/profile`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Failed to update user profile');
+    if (!res.ok) throw new Error('Failed to log job action');
     return res.json();
   },
 
@@ -405,6 +343,16 @@ export const api = {
     return res.json();
   },
 
+  async assignInventory(data: any) {
+    const res = await fetch(`${API_BASE}/api/inventory/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to assign inventory');
+    return res.json();
+  },
+
   // ===== CUSTOMERS =====
   async getCustomers() {
     const res = await fetch(`${API_BASE}/api/customers`);
@@ -432,21 +380,43 @@ export const api = {
     return res.json();
   },
 
-  // ===== SPLICES =====
-  async getSplices(closureId?: number) {
-    const url = closureId ? `${API_BASE}/api/splices?closure_id=${closureId}` : `${API_BASE}/api/splices`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Failed to fetch splices');
+  // ===== REPORTS & STATS =====
+  async getStats() {
+    const res = await fetch(`${API_BASE}/api/stats`);
+    if (!res.ok) throw new Error('Failed to fetch stats');
     return res.json();
   },
 
-  async createSplice(data: any) {
-    const res = await fetch(`${API_BASE}/api/splices`, {
+  async getDailyReports() {
+    const res = await fetch(`${API_BASE}/api/daily-reports`);
+    if (!res.ok) throw new Error('Failed to fetch daily reports');
+    return res.json();
+  },
+
+  async createDailyReport(data: any) {
+    const res = await fetch(`${API_BASE}/api/daily-reports`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error('Failed to create splice');
+    if (!res.ok) throw new Error('Failed to create daily report');
+    return res.json();
+  },
+
+  // ===== SETTINGS =====
+  async getUserSettings(userId: number) {
+    const res = await fetch(`${API_BASE}/api/users/${userId}/settings`);
+    if (!res.ok) throw new Error('Failed to fetch user settings');
+    return res.json();
+  },
+
+  async updateUserSettings(userId: number, settings: any) {
+    const res = await fetch(`${API_BASE}/api/users/${userId}/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    if (!res.ok) throw new Error('Failed to update user settings');
     return res.json();
   },
 
