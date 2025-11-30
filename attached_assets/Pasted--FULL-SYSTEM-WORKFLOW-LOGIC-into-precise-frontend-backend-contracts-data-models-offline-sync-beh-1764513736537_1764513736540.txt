@@ -1,0 +1,468 @@
+ FULL SYSTEM WORKFLOW LOGIC into precise frontend ↔ backend contracts, data models, offline/sync behavior, UI components, DB schema suggestions, acceptance criteria, and a prioritized implementation checklist. Treat this as the single source of truth for engineering work and QA.
+
+I organized it so you can hand each module to a frontend or backend engineer and they can implement or test end-to-end.
+
+Summary / assumptions
+
+Frontend: Expo React Native + TypeScript (existing repo), React Navigation, React Query recommended.
+Backend: Node + Express + TypeScript + Postgres (existing repo backend/), JWT auth.
+Offline: device-side queue + POST /sync/batch (already scaffolded). Photos uploaded via /uploads.
+Main discovery: Map is the central UI; every entity must be addressable on the map.
+High-level mapping (modules) For each domain module I list: purpose, frontend pieces, backend pieces, DB tables, key endpoints, offline behavior, acceptance criteria.
+A. Core / Auth
+
+Purpose: authenticate users, store profile & role, secure all endpoints.
+Frontend:
+Screens: LoginScreen, RegisterScreen, ProfileScreen, ChangePassword
+Client: apiClient.login/register/me/logout, token storage in AsyncStorage; auth guard for navigation; auto-attach Authorization header
+Backend:
+Endpoints:
+POST /auth/register { name, role, phone?, email?, password } -> { token, user }
+POST /auth/login { identifier, password } -> { token, user }
+GET /auth/me -> { user } (protected)
+Middleware: authMiddleware (JWT verify), role-check helper (roleAllowed('supervisor'))
+DB:
+users (id uuid, name, email, phone, password_hash, role, created_at, updated_at)
+Offline:
+Auth is online-only. Persist token locally and allow offline read of cached user data.
+Acceptance:
+Register/login returns token; token used for protected endpoints; invalid token returns 401.
+B. Map (central aggregator)
+
+Purpose: show map tiles, GPS, render markers/routes/closures/nodes/customers; entry point to create/edit elements.
+Frontend:
+Screens: MapScreen (MapView), ElementPopup (tap), DrawRouteScreen, AddElementModal
+Components: MapToolbar (Add, Draw, Filter), MapLegend, GPSButton
+Data hooks: useMapData(bbox), useMapElements(filters)
+Backend:
+Endpoints:
+GET /map/data?bbox=minLng,minLat,maxLng,maxLat -> { markers, routes, closures, nodes, customers }
+GET /map/tiles/:z/:x/:y -> tile binary (if server serves tiles) — optional if using third-party tiles
+Should support pagination or cluster-based responses for large areas
+DB:
+routes (id, name, color, length_m, geometry jsonb/geo, attributes jsonb, created_by)
+markers (id, type, label, location jsonb, data jsonb)
+closures (id, type, location jsonb, fiber_count, splitters jsonb, data jsonb)
+nodes (id, type, location jsonb, data jsonb)
+Offline:
+Map loads offline tiles and cached map data; new elements saved locally and queued (see Sync).
+Acceptance:
+MapScreen loads tiles and aggregated data; tapping element shows popup with edit option.
+C. Routes
+
+Purpose: draw, edit, store fiber routes and metadata.
+Frontend:
+Screens: RoutesList, RouteDetail, RouteEditor (draw + set metadata)
+Hooks: useRoutes, useRoute(id), useCreateRoute (mutation), useUpdateRoute
+Backend:
+Endpoints:
+GET /routes?bbox... -> [RouteSummary]
+GET /routes/:id -> RouteDetail (points)
+POST /routes { name, color, points:[{lat,lng}], cableType, cores, notes } -> created route
+PUT /routes/:id { ... } -> updated
+DELETE /routes/:id
+Server calculates route length (store length_m) and optionally polyline encoding
+DB:
+routes table fields above; store points as geojson or PostGIS geometry (recommended: PostGIS if spatial queries needed; otherwise jsonb)
+Offline:
+Create/update route operations queue locally; server resolves clientId -> serverId on sync.
+Acceptance:
+Drawing computes distances and displays length; saved route visible in map and route list after sync.
+D. Nodes / Poles
+
+Purpose: represent infrastructure elements (poles, handholes).
+Frontend:
+Screens: NodeList, NodeEditor (add/edit), attach closures
+Hooks: useNodes, createNode, updateNode
+Backend:
+Endpoints:
+GET /nodes
+POST /nodes
+PUT /nodes/:id
+Payload contains location, type, attachments
+DB:
+nodes (id, type, location jsonb, attributes jsonb)
+Offline:
+queue write ops, link to routes after sync if needed
+Acceptance:
+Add node via GPS/map; assign route; visible and editable.
+E. Closures
+
+Purpose: closures (ATB, FAT, Dome, Inline, ODF, SplitterBox) including splices & connected routes.
+Frontend:
+Screens: ClosuresList, ClosureDetail (splices & power), ClosureEditor
+Components: SpliceMap (visual)
+Hooks: useClosures, createClosure, updateClosure, useClosureSplices
+Backend:
+Endpoints:
+GET /closures
+GET /closures/:id
+POST /closures
+PUT /closures/:id
+GET /closures/:id/splices
+POST /closures/:id/splices
+Closure detail includes computed power summary if server calculates
+DB:
+closures (id, type, location jsonb, fiber_count, splitters jsonb, metadata jsonb)
+splices (id, closure_id, fiber_in, fiber_out, tube, color, loss_db, photos jsonb, created_by)
+Offline:
+All closure creation/edits queued; photo uploads referenced by local upload placeholders until synced
+Acceptance:
+Create closure with required fields; view splices; server returns closure with computed power chain if available.
+F. Splices
+
+Purpose: record fiber splicing mapping and loss readings.
+Frontend:
+UI inside ClosureDetail to add splice entries, with photos and loss
+Hooks: createSplice, updateSplice
+Backend:
+Endpoints:
+POST /closures/:id/splices
+PUT /splices/:id
+GET /splices/:id
+DB:
+splices table as above (index closure_id)
+Offline:
+Splice ops queued, validated on server; conflicts possible if simultaneous edits — server returns conflict.
+Acceptance:
+Splice creation updates closure virtual diagram and power chain.
+G. Splitters & Power propagation
+
+Purpose: model splitters (1x4, 1x8...) and compute signal power along routes to customers.
+Frontend:
+UI: SplitterEditor, PowerChainViewer (graph or list), alerts for below threshold
+Hooks: useSplitters, computePower (calls API)
+Backend:
+Endpoints:
+GET /splitters
+POST /splitters
+POST /power/calculate { routeId / inputNodes } -> { nodes: [{id, power}], alerts }
+Power computation must use inputs: input power dBm, splice loss, splitter loss, cable attenuation (db/km), length
+DB:
+splitters (id, type, ratio, closure_id, mapping jsonb)
+power_snapshots optional
+Offline:
+Calculate on server on sync or on-demand; client caches computed results
+Acceptance:
+Provide accurate power at customers and closures and alert for thresholds.
+H. Customer Drops / ONT
+
+Purpose: add customer endpoints and track ONT power.
+Frontend:
+Screens: CustomerList, CustomerEditor (location, parent closure/splitter, drop length, ONT reading)
+Hooks: useCustomers, createCustomer
+Backend:
+Endpoints:
+GET /customers
+POST /customers
+PUT /customers/:id
+DB:
+customers (id, customer_no, location jsonb, parent_closure_id, drop_length_m, ont_power_dbm, metadata)
+Offline:
+Create customer entries offline and sync; update splitter load
+Acceptance:
+New customer assigned to closure/splitter and reflected in power calculations.
+I. Jobs & Daily Reports
+
+Purpose: technician job tracking and reporting; supervisor approvals.
+Frontend:
+Screens: JobsList, JobDetail (start/stop timer), DailyReportForm, SupervisorReview
+Hooks: useJobs, createJob, logJobAction, useReports
+Backend:
+Endpoints:
+GET /jobs
+POST /jobs { type, assignedTo, routeId, metadata }
+GET /jobs/:id
+POST /jobs/:id/log { action, timestamp, details, photos, splicesDone }
+GET /reports/daily
+POST /reports/daily
+POST /jobs/:id/approve (supervisor)
+DB:
+jobs (id, type, status, assigned_to, route_id, start_time, end_time, metadata)
+job_logs (id, job_id, action, timestamp, details, photos)
+daily_reports table
+Offline:
+Job logs must be queued; SyncManager should preserve order and timestamps; supervisor approval ideally online-only
+Acceptance:
+Start/stop job with logs and photos; reports exportable.
+J. Inventory & Tools
+
+Purpose: track tools and assignment to technicians and jobs.
+Frontend:
+Screens: InventoryList, InventoryItemEditor, AssignToolModal
+Hooks: useInventory, assignTool
+Backend:
+Endpoints:
+GET /inventory
+POST /inventory
+PUT /inventory/:id
+POST /inventory/assign { itemId, userId, jobId? }
+DB:
+inventory (id, name, sku, status, assigned_to, metadata)
+inventory_history
+Offline:
+Assign operations queued; conflicts when multiple assignments possible
+Acceptance:
+Assign tool to tech; history recorded.
+K. Uploads (photos)
+
+Purpose: accept multipart uploads, store files and return stable upload ids used in queued payloads.
+Frontend:
+apiClient.uploadPhoto(formData) with file URI; photo selection & optional compression
+Backend:
+Endpoint:
+POST /uploads (multipart) -> { uploads: [{ id, url, size, mime }] }
+Storage options: local disk (dev) or S3 (production). Persist metadata to uploads table.
+DB:
+uploads (id, url, owner_user_id, filename, mime, size, created_at)
+Offline:
+SyncManager must upload local files before sending queued items referencing them (already implemented).
+Acceptance:
+Upload returns stable id; queued payload can reference upload ids after sync.
+L. Reporting & Exports
+
+Purpose: technical reports: splicing summary, route summary, daily job reports.
+Backend:
+Endpoints to generate CSV/PDF:
+GET /reports/route/:id/export?format=pdf|csv
+GET /reports/daily?date=yyyy-mm-dd
+Frontend:
+Request export, show progress, allow download/share.
+Offline:
+Exports should be server-side jobs; client polls or receives notification when ready.
+Acceptance:
+Export requests produce downloadable files.
+M. Offline Sync Engine (already scaffolded)
+
+Purpose: queue writes locally, upload photos, batch-send to /sync/batch, handle results (ok/conflict/error) and id mapping.
+Frontend:
+SyncManager with enqueue(resource, operation, payload), startAutoSync(), events for UI. QueueStore persists queue and idmap.
+React Query mutations should enqueue in case of offline or network errors.
+Backend:
+/sync/batch handler accepts items and persists to DB; returns mapping clientId->serverId and conflict info.
+Acceptance:
+Items created offline are present server-side after sync; photos uploaded and referenced by server ids.
+Concrete API contract (canonical list) This list is the minimum contract the frontend will call. For each endpoint I include method, path, request snippet, response snippet.
+POST /auth/register
+
+Req: { name, role, phone?, email?, password }
+Res: { token, user: { id, name, role, phone, email } }
+POST /auth/login
+
+Req: { identifier, password }
+Res: { token, user }
+GET /auth/me
+
+Res: { user }
+POST /uploads
+
+multipart/form-data: files[]
+Res: { uploads: [{ id, url, filename, mime, size }] }
+GET /map/data?bbox=...
+
+Res: { markers: [], routes:[], closures:[], nodes:[], customers:[] }
+Routes:
+
+GET /routes
+POST /routes { name, color, points, cableType, cores }
+GET /routes/:id
+PUT /routes/:id
+DELETE /routes/:id
+Nodes:
+
+GET /nodes
+POST /nodes { type, location, routeId, attributes }
+PUT /nodes/:id
+Closures:
+
+GET /closures
+POST /closures { type, location, fiberCount, routeId, splitters?, photos?, notes? }
+GET /closures/:id
+PUT /closures/:id
+GET /closures/:id/splices
+POST /closures/:id/splices { fiberIn, fiberOut, color, lossDb, photos? }
+Splices:
+
+POST /splices
+PUT /splices/:id
+Splitters / Power:
+
+POST /splitters
+POST /power/calculate { routeId?, nodes: [...] } -> { nodes: [{id, powerDbm}], alerts: [] }
+Customers:
+
+GET /customers
+POST /customers { customerNumber, location, parentClosureId, dropLengthMeters, ontPowerDbm }
+Jobs:
+
+GET /jobs
+POST /jobs { type, assignedTo, routeId, metadata }
+GET /jobs/:id
+POST /jobs/:id/log { action, timestamp, details, photos, splicesDone }
+POST /jobs/:id/approve (supervisor only)
+GET /reports/daily, POST /reports/daily
+Inventory:
+
+GET /inventory
+POST /inventory
+POST /inventory/assign { itemId, userId, jobId? }
+Sync:
+
+POST /sync/batch { clientTime, items: QueueItem[] } -> { serverTime, results: [{ clientId, serverId?, status, message?, serverVersion? }] }
+GET /sync/changes?since=timestamp -> server modifications since timestamp
+DB schema (recommended normalized schema, not exhaustive) You already have a generic resources table. For production, implement normalized schemas below. Use Postgres with PostGIS if spatial queries/joins are needed.
+users (id uuid PK, name, email, phone, password_hash, role, created_at, updated_at)
+uploads (id uuid PK, url text, filename text, mime text, size int, owner_id uuid FK users, created_at)
+routes (id uuid PK, name text, color text, length_m numeric, cable_type text, cores int, points jsonb, created_by uuid FK, created_at, updated_at)
+nodes (id uuid PK, type text, location jsonb, route_id uuid FK routes, attributes jsonb)
+closures (id uuid PK, type text, location jsonb, fiber_count int, route_id uuid, splitters jsonb, created_by uuid, metadata jsonb)
+splices (id uuid PK, closure_id uuid FK closures, fiber_in text, fiber_out text, tube int, color text, splice_type text, loss_db numeric, photos jsonb, created_by uuid, created_at)
+splitters (id uuid PK, closure_id uuid, type text, ratio int, mapping jsonb)
+customers (id uuid PK, customer_number text, location jsonb, parent_closure_id uuid, drop_length_m numeric, ont_power_dbm numeric)
+jobs (id uuid PK, type text, status text, assigned_to uuid, route_id uuid, start_time, end_time, metadata jsonb)
+job_logs (id uuid PK, job_id uuid FK, action text, timestamp, details jsonb, photos jsonb)
+inventory (id uuid PK, name text, sku text, status text, assigned_to uuid)
+resources (optional generic resources table used by sync for transient generic items)
+Add indexes for lookups (resource_type, created_by, route_id, spatial indexes on location if using PostGIS).
+
+Frontend structure & code architecture (recommended)
+src/
+api/ (apiClient.ts)
+sync/ (SyncManager, queueStore, types)
+hooks/
+useAuth.ts (login/register/me + token handling)
+useRoutes.ts, useClosures.ts, useNodes.ts, useJobs.ts, useInventory.ts (React Query hooks)
+screens/
+Auth: LoginScreen.tsx, RegisterScreen.tsx, ProfileScreen.tsx
+Map: MapScreen.tsx, DrawRouteScreen.tsx
+Routes: RoutesList.tsx, RouteDetail.tsx, RouteEditor.tsx
+Closures: ClosuresList.tsx, ClosureDetail.tsx, ClosureEditor.tsx
+Jobs: JobsList.tsx, JobDetail.tsx
+components/
+MapToolbar, ElementPopup, SpliceMap, PowerChainViewer, ImageUploader
+store/ (optional redux or Zustand for global UI state like selected map element)
+navigation/ (stack & tab navigators)
+utils/ (distance calculators, fiber attenuation formulas)
+Use React Query for server state + background sync:
+Queries: key names like ['routes'], ['closures', id]
+Mutations: create/update/delete that on network failure either retry or call SyncManager.enqueue
+Offline sync contract & behavior (detailed)
+QueueItem shape (frontend & server must agree): { clientId: string, // local uuid operation: 'create' | 'update' | 'delete', resource: 'route'|'closure'|..., payload: object, tentativeServerId?: string, createdAt: ISO timestamp, retries: number }
+Uploads:
+Local files must be uploaded to /uploads first and referenced by upload ids in queued payloads.
+SyncManager should try to upload prior to batch POST.
+Batch format: { clientTime: ISO, items: [QueueItem] }
+Server response: { serverTime, results: [{ clientId, serverId?, status:'ok'|'conflict'|'error', message?, serverVersion? }] }
+Conflict resolution:
+Server returns conflict + serverVersion.
+Client marks item conflicted; UI shows conflict resolution flow: Keep Local / Keep Server / Merge (open diff).
+Implement versioning (row.version integer or updated_at timestamp) on server for reliable detection.
+Id mapping:
+When server returns serverId for a create, client must store mapping clientId -> serverId (idMap) and update local references.
+Ordering:
+Keep batch order meaningful: parent resources first (routes) then children (closures, splices), or send parent references as tentativeServerId so backend can link.
+Retries:
+Retry failed items with exponential backoff; consider maxRetries (e.g., 5) before marking user-visible failure.
+Offline UI:
+Show queue indicator (dot or queued count), per-item sync status, and manual "Sync now" button.
+Sync triggers:
+on app foreground, connectivity regained, manual user action, periodic timer (every 30-60s).
+Background sync:
+Use OS background tasks or headless JS for long-running sync if needed (optional later).
+Security & Roles
+Use JWT for auth (already added).
+Add role middleware:
+Only supervisors can approve jobs, delete closures, or change specific attributes.
+Validate inputs server-side (use Zod or Joi) before persisting.
+Rate-limit endpoints (auth especially) and add request validation for file uploads (size & type).
+Ensure HTTPS and secure JWT secret in production.
+Testing & QA acceptance criteria (per module) Provide simple acceptance tests (manual or automated) that must pass before marking module done.
+Auth:
+
+Register a user with email/phone; verify user stored and token returned.
+Login with correct/incorrect creds; expect 200/401.
+GET /auth/me returns user.
+Map & Routes:
+
+Draw a route, save it offline, sync — confirm route visible on server and contains length.
+Edit route on two devices — conflict detection test.
+Closures & Splices:
+
+Add closure with splices & photos offline; after sync photos are on server and splices present in DB.
+Update same closure on two clients to trigger conflict response.
+Jobs:
+
+Start job on device, add logs + photos offline, sync -> server shows job with logs and attachments; supervisor can approve.
+Uploads:
+
+Upload photo via app -> server returns upload id and URL accessible.
+Upload invalid file type or oversized -> server rejects.
+Sync:
+
+Queue 100 items, sync in batches, verify no data loss.
+Simultaneous create children referring to parent created offline (test id mapping).
+Implementation plan & prioritization (sprints) I recommend incremental delivery. Each sprint = 1 week (adjust to your team). Priorities based on MVP path: Auth + Uploads + Routes + Map.
+Sprint 0 — infra & security (1 week)
+
+Add JWT auth (done in previous step); add role middleware; seed admin user.
+Implement /uploads endpoint (backend) and frontend upload component (ImagePicker, compression).
+Wire apiClient.uploadPhoto to backend.
+Sprint 1 — Core Map + Routes MVP (2 weeks)
+
+Backend: implement normalized routes table + endpoints (CRUD), migration scripts.
+Frontend: MapScreen loads /map/data, DrawRouteScreen, useCreateRoute + sync integration.
+Tests: draw → save offline → sync → verify server.
+Sprint 2 — Closures & Splices (2 weeks)
+
+Backend: closures & splices tables & endpoints (migrations + controllers).
+Frontend: ClosureEditor & Splice creation UI; SpliceMap component.
+Tests: closure creation and splice loss readings and photo uploads.
+Sprint 3 — Power chain & splitters (2 weeks)
+
+Backend: implement /power/calculate and store splitter config.
+Frontend: PowerChainViewer and splitters UI.
+Tests: compute power for sample routes.
+Sprint 4 — Jobs & Inventory + Reports (2 weeks)
+
+Backend: jobs table & logs, inventory tables, export endpoints.
+Frontend: Jobs UI with timer; inventory assignment.
+Tests: start/stop job, attach splices/photos, generate daily report.
+Sprint 5 — Offline polish & scalability (2 weeks)
+
+Improve SyncManager: exponential backoff, file blob persistence, conflict UI.
+Add background sync, cluster map markers, implement PostGIS spatial indices.
+Sprint 6 — QA, security hardening & release (2 weeks)
+
+End-to-end QA, penetration checks, error monitoring, logging, CI/CD for backend and mobile release builds.
+What I already implemented vs still needed (concise) DONE (in the repo as of our last changes)
+Frontend:
+apiClient skeleton with login/register/me/logout, token & user storage
+LoginScreen & RegisterScreen example screens
+SyncManager, queueStore, types (enqueue/upload pending files/batch sync)
+Backend:
+/sync/batch DB-backed implementation with repository and migrations (resources table)
+Auth module: users migration, authRepository, authController, authMiddleware, integration into server
+DB connection helper and repository methods
+Documentation & READMEs for migrations and sync flow
+NOT DONE (high-priority remaining work to reach full functionality)
+
+Uploads endpoint (multipart, storage & uploads table)
+Normalized DB schemas & controllers for routes, closures, splices, nodes, customers, jobs, inventory
+Map aggregation endpoint /map/data
+Full React Query hook set and screens for all modules
+Conflict resolution UI flows
+Background sync & native file handling improvements
+Tests, performance optimization, PostGIS/geo indexing
+Role-based permissions enforcement across endpoints
+Immediate next steps I recommend you run/do now
+Implement /uploads (backend) + uploads table, and wire apiClient.uploadPhoto (frontend). This unblocks photo-based queued operations.
+Implement routes table + endpoints + migration. Implement DrawRouteScreen + createRoute enqueue. This unlocks the core feature of drawing routes and mapping closures.
+Implement closures & splices tables + endpoints. Integrate closure creation flow into Map UI.
+Cross-cutting: add server-side validation (Zod or Joi), add Swagger/OpenAPI so frontend and backend share schema definitions.
+Add tests for sync flows (integration tests verifying clientId→serverId mapping).
+Deliverable pack I can produce next (pick one or more)
+A. Backend uploads module: multer-based POST /uploads, uploads table migration, S3 adapter optional.
+B. Routes module: migrations (routes table), repository functions, controller endpoints, express routes, unit tests.
+C. Closures & splices module: migrations, repo and controllers.
+D. Frontend React Query hooks & example screens for Map + Routes + Closures integrated with SyncManager.
+E. OpenAPI spec for all endpoints above (auth, uploads, sync, routes, closures, splices, jobs).
