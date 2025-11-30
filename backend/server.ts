@@ -1,12 +1,18 @@
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import pg from 'pg';
-import { hashPassword, verifyPassword, generateToken, authMiddleware, AuthRequest } from './auth.js';
+import http from 'http';
+import { hashPassword, verifyPassword, generateToken, authMiddleware, AuthRequest, setAuthPool } from './auth.js';
 import uploadRouter, { initUploadsTable } from './uploads.js';
 import mapRouter from './map.js';
+import { sendPasswordRecoveryEmail, generateRecoveryCode } from './email.js';
+import { notificationServer, analytics, getDashboardAnalytics, syncQueue } from './advanced.js';
+
+const recoveryCodesStore = new Map<string, { code: string; expires: Date }>();
 
 const { Pool } = pg;
 const app: Express = express();
+const server = http.createServer(app);
 const PORT: number = parseInt(process.env.PORT || '5000', 10);
 
 const pool = new Pool({
@@ -15,6 +21,8 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
 });
+
+setAuthPool(pool);
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -43,9 +51,30 @@ async function initDatabase() {
         password_hash VARCHAR(255) NOT NULL,
         role VARCHAR(50) DEFAULT 'technician',
         settings JSONB DEFAULT '{}',
+        token_version BIGINT DEFAULT 0,
         last_login TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW()
       );
+
+      -- Password reset tokens
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        token VARCHAR(10) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id);
+      CREATE INDEX IF NOT EXISTS idx_password_reset_token ON password_reset_tokens(token);
+      
+      -- Add token_version column if it doesn't exist (for existing databases)
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'token_version') THEN
+          ALTER TABLE users ADD COLUMN token_version BIGINT DEFAULT 0;
+        END IF;
+      END $$;
 
       -- Routes (fiber lines/cables)
       CREATE TABLE IF NOT EXISTS routes (
@@ -332,12 +361,12 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
 
     const hashedPassword = await hashPassword(password);
     const result = await pool.query(
-      'INSERT INTO users (full_name, email, phone, password_hash, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, full_name, phone, role',
+      'INSERT INTO users (full_name, email, phone, password_hash, role, token_version) VALUES ($1, $2, $3, $4, $5, 0) RETURNING id, email, full_name, phone, role',
       [full_name, email, phone || null, hashedPassword, role || 'technician']
     );
     
     const user = result.rows[0];
-    const token = generateToken(user.id, user.email, user.role);
+    const token = generateToken(user.id, user.email, user.role, 0);
     
     res.status(201).json({ 
       success: true, 
@@ -361,7 +390,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 
     const result = await pool.query(
-      'SELECT id, email, full_name, phone, role, settings, password_hash FROM users WHERE email = $1',
+      'SELECT id, email, full_name, phone, role, settings, password_hash, token_version FROM users WHERE email = $1',
       [email]
     );
     
@@ -378,7 +407,8 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 
     await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
     
-    const token = generateToken(user.id, user.email, user.role);
+    const tokenVersion = parseInt(user.token_version) || 0;
+    const token = generateToken(user.id, user.email, user.role, tokenVersion);
     
     res.json({ 
       success: true, 
@@ -413,6 +443,126 @@ app.get('/api/auth/me', authMiddleware, async (req: AuthRequest, res: Response) 
     }
 
     res.json({ user: result.rows[0] });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/password-recovery/send-code', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const userResult = await pool.query('SELECT id, email FROM users WHERE email = $1', [email]);
+    
+    if (userResult.rows.length === 0) {
+      return res.json({ success: true, message: 'If the email exists, a recovery code has been sent' });
+    }
+
+    const userId = userResult.rows[0].id;
+    const code = generateRecoveryCode();
+    const expires = new Date(Date.now() + 15 * 60 * 1000);
+    
+    await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
+    
+    await pool.query(
+      'INSERT INTO password_reset_tokens (user_id, token, expires_at, used) VALUES ($1, $2, $3, false)',
+      [userId, code, expires]
+    );
+
+    try {
+      await sendPasswordRecoveryEmail(email, code);
+      console.log(`Recovery code sent to ${email}`);
+    } catch (emailError) {
+      console.log(`Email service not available. Recovery code for ${email}: ${code}`);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Recovery code sent to your email',
+      devCode: process.env.NODE_ENV === 'development' ? code : undefined
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/password-recovery/verify-code', async (req: Request, res: Response) => {
+  try {
+    const { email, code } = req.body;
+    
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email and code are required' });
+    }
+
+    const result = await pool.query(`
+      SELECT prt.id, prt.expires_at, prt.used, u.id as user_id
+      FROM password_reset_tokens prt
+      JOIN users u ON prt.user_id = u.id
+      WHERE u.email = $1 AND prt.token = $2 AND prt.used = false
+    `, [email, code]);
+    
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid recovery code' });
+    }
+
+    const token = result.rows[0];
+    
+    if (new Date() > new Date(token.expires_at)) {
+      await pool.query('DELETE FROM password_reset_tokens WHERE id = $1', [token.id]);
+      return res.status(400).json({ error: 'Recovery code has expired. Please request a new one.' });
+    }
+
+    res.json({ success: true, message: 'Code verified' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/password-recovery/reset', async (req: Request, res: Response) => {
+  try {
+    const { email, code, new_password } = req.body;
+    
+    if (!email || !code || !new_password) {
+      return res.status(400).json({ error: 'Email, code, and new password are required' });
+    }
+
+    if (new_password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const tokenResult = await pool.query(`
+      SELECT prt.id, prt.expires_at, prt.used, u.id as user_id
+      FROM password_reset_tokens prt
+      JOIN users u ON prt.user_id = u.id
+      WHERE u.email = $1 AND prt.token = $2 AND prt.used = false
+    `, [email, code]);
+    
+    if (tokenResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid recovery code' });
+    }
+
+    const token = tokenResult.rows[0];
+    
+    if (new Date() > new Date(token.expires_at)) {
+      await pool.query('DELETE FROM password_reset_tokens WHERE id = $1', [token.id]);
+      return res.status(400).json({ error: 'Recovery code has expired. Please request a new one.' });
+    }
+
+    const hashedPassword = await hashPassword(new_password);
+    const newTokenVersion = Date.now();
+    
+    await pool.query(
+      'UPDATE users SET password_hash = $1, token_version = $2 WHERE id = $3',
+      [hashedPassword, newTokenVersion, token.user_id]
+    );
+
+    await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [token.user_id]);
+
+    res.json({ success: true, message: 'Password reset successful. Please login with your new password.' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1396,21 +1546,92 @@ app.get('/api/analytics/performance', (req: Request, res: Response) => {
 // Advanced: Analytics Events (Advanced Feature #4)
 app.get('/api/analytics', (req: Request, res: Response) => {
   try {
+    const eventStats = analytics.getStats();
+    const wsClients = notificationServer.getConnectedClients();
+    const queueStats = syncQueue.getStats();
+    
     res.json({
-      events: [
-        { type: 'route_created', timestamp: new Date().toISOString(), userId: 1 },
-        { type: 'splice_created', timestamp: new Date().toISOString(), userId: 1 },
-        { type: 'job_completed', timestamp: new Date().toISOString(), userId: 1 }
-      ],
-      websockets: 0,
-      offlineSync: { queueSize: 0, items: [] },
-      totalEvents: 147
+      events: analytics.getEvents(),
+      websockets: wsClients,
+      offlineSync: queueStats,
+      stats: eventStats,
+      timestamp: new Date().toISOString()
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ FiberTrace v1.0.0 | Modules A-M Complete | Performance Optimized`);
+// Advanced: Analytics Dashboard (with database stats)
+app.get('/api/analytics/dashboard', async (req: Request, res: Response) => {
+  try {
+    const getDashboard = getDashboardAnalytics(pool);
+    const data = await getDashboard();
+    res.json(data);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
+
+// Notifications: Broadcast to all connected clients (admin only)
+app.post('/api/notifications/broadcast', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const userResult = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.userId]);
+    if (userResult.rows.length === 0 || userResult.rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const { event, message, data } = req.body;
+    
+    if (!event || !message) {
+      return res.status(400).json({ error: 'Event and message are required' });
+    }
+
+    notificationServer.broadcast(event, { message, ...data, userId: req.user?.userId });
+    analytics.recordEvent('notification_sent', { event, userId: req.user?.userId });
+    
+    res.json({ 
+      success: true, 
+      message: 'Notification broadcast sent',
+      connectedClients: notificationServer.getConnectedClients()
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// WebSocket status endpoint (authenticated)
+app.get('/api/websocket/status', authMiddleware, (req: AuthRequest, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  res.json({
+    connected: true,
+    clients: notificationServer.getConnectedClients(),
+    serverUrl: `wss://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`,
+    timestamp: new Date().toISOString()
+  });
+});
+
+async function startServer() {
+  try {
+    await initDatabase();
+    await initUploadsTable(pool);
+    
+    notificationServer.initialize(server);
+    
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`✅ FiberTrace v1.0.0 | Modules A-M Complete | WebSocket Ready | Performance Optimized`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();

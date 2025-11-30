@@ -69,6 +69,45 @@ export const api = {
     return res.json();
   },
 
+  async sendRecoveryCode(email: string) {
+    const res = await fetch(`${API_BASE}/api/auth/password-recovery/send-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Failed to send recovery code' }));
+      throw new Error(error.error || 'Failed to send recovery code');
+    }
+    return res.json();
+  },
+
+  async verifyRecoveryCode(email: string, code: string) {
+    const res = await fetch(`${API_BASE}/api/auth/password-recovery/verify-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Invalid recovery code' }));
+      throw new Error(error.error || 'Invalid recovery code');
+    }
+    return res.json();
+  },
+
+  async resetPassword(email: string, code: string, new_password: string) {
+    const res = await fetch(`${API_BASE}/api/auth/password-recovery/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code, new_password }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Password reset failed' }));
+      throw new Error(error.error || 'Password reset failed');
+    }
+    return res.json();
+  },
+
   // ===== MAP DATA =====
   async getMapData() {
     const headers = await getAuthHeader();

@@ -41,8 +41,17 @@
 - ✅ POST /auth/register - Real user creation
 - ✅ POST /auth/login - JWT token generation
 - ✅ GET /auth/me - Protected endpoint
+- ✅ POST /auth/password-recovery/send-code - Send recovery email
+- ✅ POST /auth/password-recovery/verify-code - Verify recovery code
+- ✅ POST /auth/password-recovery/reset - Reset password
 - ✅ bcrypt 10-round password hashing
 - ✅ 7-day JWT token expiry
+
+### Real-Time Features
+- ✅ WebSocket server for live updates
+- ✅ GET /websocket/status - Connection status
+- ✅ POST /notifications/broadcast - Broadcast to all clients
+- ✅ Real-time analytics tracking
 
 ### Map & Visualization  
 - ✅ GET /map/data - All layers aggregated

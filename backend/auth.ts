@@ -1,11 +1,17 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
+import pg from 'pg';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fibertrace-jwt-secret-key-change-in-production';
 const SALT_ROUNDS = 10;
 
-// ============ PASSWORD HASHING ============
+let pool: pg.Pool | null = null;
+
+export function setAuthPool(dbPool: pg.Pool) {
+  pool = dbPool;
+}
+
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, SALT_ROUNDS);
 }
@@ -14,10 +20,9 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-// ============ JWT TOKEN GENERATION ============
-export function generateToken(userId: number, email: string, role: string): string {
+export function generateToken(userId: number, email: string, role: string, tokenVersion: number = 0): string {
   return jwt.sign(
-    { userId, email, role },
+    { userId, email, role, tokenVersion },
     JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -31,16 +36,16 @@ export function verifyToken(token: string): any {
   }
 }
 
-// ============ AUTH MIDDLEWARE ============
 export interface AuthRequest extends Request {
   user?: {
     userId: number;
     email: string;
     role: string;
+    tokenVersion?: number;
   };
 }
 
-export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+export async function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -54,11 +59,35 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
+  if (decoded.tokenVersion === undefined) {
+    return res.status(401).json({ error: 'Token missing version claim. Please login again.' });
+  }
+
+  if (pool) {
+    try {
+      const result = await pool.query(
+        'SELECT token_version FROM users WHERE id = $1',
+        [decoded.userId]
+      );
+      
+      if (result.rows.length === 0) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+      
+      const currentTokenVersion = parseInt(result.rows[0].token_version) || 0;
+      if (decoded.tokenVersion !== currentTokenVersion) {
+        return res.status(401).json({ error: 'Token has been invalidated. Please login again.' });
+      }
+    } catch (error) {
+      console.error('Token version check failed:', error);
+      return res.status(500).json({ error: 'Authentication service unavailable' });
+    }
+  }
+
   req.user = decoded;
   next();
 }
 
-// ============ ROLE-BASED ACCESS CONTROL ============
 export function requireRole(allowedRoles: string[]) {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user || !allowedRoles.includes(req.user.role)) {

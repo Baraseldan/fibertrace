@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, ImageBackground, ScrollView } from 'react-native';
 import { colors } from '../theme/colors';
+import { api } from '../lib/api';
 
 interface PasswordRecoveryScreenProps {
   onRecoverySuccess?: () => void;
@@ -15,6 +16,7 @@ export default function PasswordRecoveryScreen({ onRecoverySuccess, onSwitchToLo
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [devCode, setDevCode] = useState<string | null>(null);
 
   const handleSendCode = async () => {
     if (!email.includes('@')) {
@@ -24,21 +26,34 @@ export default function PasswordRecoveryScreen({ onRecoverySuccess, onSwitchToLo
 
     setLoading(true);
     try {
-      // In production, backend would send email with recovery code
-      // For demo, we just proceed
-      Alert.alert('Success', 'Recovery code sent to your email (demo: use 123456)');
+      const result = await api.sendRecoveryCode(email);
+      if (result.devCode) {
+        setDevCode(result.devCode);
+      }
+      Alert.alert('Success', result.message || 'Recovery code sent to your email');
       setStep('code');
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to send recovery code');
     } finally {
       setLoading(false);
     }
   };
 
   const handleVerifyCode = async () => {
-    if (code !== '123456') {
-      Alert.alert('Error', 'Invalid recovery code. Use 123456 for demo.');
+    if (!code || code.length < 6) {
+      Alert.alert('Error', 'Please enter the 6-digit recovery code');
       return;
     }
-    setStep('password');
+
+    setLoading(true);
+    try {
+      await api.verifyRecoveryCode(email, code);
+      setStep('password');
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Invalid recovery code');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleResetPassword = async () => {
@@ -52,27 +67,10 @@ export default function PasswordRecoveryScreen({ onRecoverySuccess, onSwitchToLo
     }
 
     setLoading(true);
-
     try {
-      // Try to reset via API
-      try {
-        const response = await fetch('http://localhost:5001/api/auth/password-reset', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, new_password_hash: newPassword }),
-        });
-
-        if (response.ok) {
-          Alert.alert('Success', 'Password reset successful! Please login with your new password.');
-          onRecoverySuccess?.();
-        } else {
-          throw new Error('Password reset failed');
-        }
-      } catch (apiError) {
-        // Fallback to local mode
-        Alert.alert('Success', 'Password reset successful! Please login with your new password.');
-        onRecoverySuccess?.();
-      }
+      await api.resetPassword(email, code, newPassword);
+      Alert.alert('Success', 'Password reset successful! Please login with your new password.');
+      onRecoverySuccess?.();
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Password reset failed');
     } finally {
@@ -127,6 +125,9 @@ export default function PasswordRecoveryScreen({ onRecoverySuccess, onSwitchToLo
             <View style={styles.formContainer}>
               <Text style={styles.stepText}>Step 2: Enter Recovery Code</Text>
               <Text style={styles.infoText}>Check your email for the recovery code</Text>
+              {devCode && (
+                <Text style={styles.devCodeText}>Dev Mode Code: {devCode}</Text>
+              )}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Recovery Code</Text>
                 <TextInput
@@ -137,6 +138,7 @@ export default function PasswordRecoveryScreen({ onRecoverySuccess, onSwitchToLo
                   onChangeText={setCode}
                   editable={!loading}
                   keyboardType="number-pad"
+                  maxLength={6}
                 />
               </View>
               <TouchableOpacity
@@ -144,7 +146,18 @@ export default function PasswordRecoveryScreen({ onRecoverySuccess, onSwitchToLo
                 onPress={handleVerifyCode}
                 disabled={loading}
               >
-                <Text style={styles.buttonText}>Verify Code</Text>
+                {loading ? (
+                  <ActivityIndicator color={colors.background} size="small" />
+                ) : (
+                  <Text style={styles.buttonText}>Verify Code</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.resendButton}
+                onPress={() => setStep('email')}
+                disabled={loading}
+              >
+                <Text style={styles.resendText}>Request new code</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -157,7 +170,7 @@ export default function PasswordRecoveryScreen({ onRecoverySuccess, onSwitchToLo
                 <View style={styles.passwordContainer}>
                   <TextInput
                     style={styles.passwordInput}
-                    placeholder="••••••••"
+                    placeholder="Min 6 characters"
                     placeholderTextColor={colors.mutedForeground}
                     value={newPassword}
                     onChangeText={setNewPassword}
@@ -174,7 +187,7 @@ export default function PasswordRecoveryScreen({ onRecoverySuccess, onSwitchToLo
                 <Text style={styles.label}>Confirm Password</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="••••••••"
+                  placeholder="Repeat password"
                   placeholderTextColor={colors.mutedForeground}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
@@ -199,7 +212,7 @@ export default function PasswordRecoveryScreen({ onRecoverySuccess, onSwitchToLo
 
           <View style={styles.linkContainer}>
             <TouchableOpacity onPress={onSwitchToLogin}>
-              <Text style={styles.linkText}><Text style={styles.linkHighlight}>← Back to Login</Text></Text>
+              <Text style={styles.linkText}><Text style={styles.linkHighlight}>Back to Login</Text></Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -218,6 +231,7 @@ const styles = StyleSheet.create({
   formContainer: { marginBottom: 30 },
   stepText: { fontSize: 14, fontWeight: '600', color: '#00ffff', marginBottom: 8 },
   infoText: { fontSize: 12, color: colors.mutedForeground, marginBottom: 16 },
+  devCodeText: { fontSize: 12, color: '#22c55e', marginBottom: 16, backgroundColor: 'rgba(34, 197, 94, 0.1)', padding: 8, borderRadius: 4 },
   inputGroup: { marginBottom: 16 },
   label: { fontSize: 13, color: colors.foreground, marginBottom: 6, fontWeight: '600' },
   input: { backgroundColor: 'rgba(30, 41, 59, 0.8)', borderWidth: 1, borderColor: '#00ffff', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 10, color: colors.foreground },
@@ -227,6 +241,8 @@ const styles = StyleSheet.create({
   button: { backgroundColor: '#00ffff', paddingVertical: 12, borderRadius: 6, alignItems: 'center', marginTop: 8 },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
+  resendButton: { marginTop: 16, alignItems: 'center' },
+  resendText: { fontSize: 12, color: '#00ffff' },
   linkContainer: { alignItems: 'center', marginTop: 20 },
   linkText: { fontSize: 12, color: colors.mutedForeground },
   linkHighlight: { color: '#00ffff', fontWeight: '600' },
