@@ -1,0 +1,41 @@
+Running "expo doctor"
+Running 15 checks on your project...
+12/15 checks passed. 3 checks failed. Possible issues detected:
+Use the --verbose flag to see more details about passed checks.
+✖ Check that native modules use compatible support package versions for installed Expo SDK
+Expected package @expo/config-plugins@~7.2.2
+Found invalid:
+  @expo/config-plugins@7.9.2
+  (for more info, run: npm why @expo/config-plugins)
+Expected package @expo/prebuild-config@~6.2.4
+Found invalid:
+  @expo/prebuild-config@6.8.1
+  (for more info, run: npm why @expo/prebuild-config)
+Advice:
+Upgrade dependencies that are using the invalid package versions.
+✖ Check if the project meets version requirements for submission to app stores
+This project is using an SDK version that by default targets Android API level 33 or lower. To submit your app to the Google Play Store after August 31 2024, you must target Android API level 34 or higher.
+Advice:
+Upgrade to Expo SDK 50 or later, which by default supports Android API level 34 Learn more: https://support.google.com/googleplay/android-developer/answer/11926878?hl=en
+✖ Check that packages match versions required by installed Expo SDK
+Some dependencies are incompatible with the installed expo version:
+  @react-native-async-storage/async-storage@1.21.0 - expected version: 1.18.2
+  expo-constants@15.4.6 - expected version: ~14.4.2
+  expo-font@11.10.3 - expected version: ~11.4.0
+  expo-location@16.5.5 - expected version: ~16.1.0
+  expo-splash-screen@0.26.5 - expected version: ~0.20.5
+  expo-status-bar@1.11.1 - expected version: ~1.6.0
+  react-native@0.73.6 - expected version: 0.72.10
+  react-native-gesture-handler@2.14.1 - expected version: ~2.12.0
+  react-native-maps@1.10.0 - expected version: 1.7.1
+  react-native-safe-area-context@4.8.2 - expected version: 4.6.3
+  react-native-screens@3.29.0 - expected version: ~3.22.0
+Your project may not work correctly until you install the correct versions of the packages.
+Fix with: npx expo install --fix
+Found outdated dependencies
+Advice:
+Use 'npx expo install --check' to review and upgrade your dependencies.
+To ignore specific packages, add them to "expo.install.exclude" in package.json. Learn more: https://expo.fyi/dependency-validation
+3 checks failed, indicating possible issues with the project.
+Command "expo doctor" failed.
+npx -y expo-doctor exited with non-zero code: 1
