@@ -1,15 +1,73 @@
 // API client for mobile app - connects to real backend
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
+let API_BASE = process.env.EXPO_PUBLIC_API_URL || '';
 
 let authToken: string | null = null;
+
+// Load backend URL from storage on startup
+let backendUrlLoaded = false;
+
+async function loadBackendUrl() {
+  if (backendUrlLoaded) return;
+  try {
+    const stored = await AsyncStorage.getItem('backend_url');
+    if (stored) {
+      API_BASE = stored;
+    }
+    backendUrlLoaded = true;
+  } catch (error) {
+    console.error('Failed to load backend URL:', error);
+    backendUrlLoaded = true;
+  }
+}
+
+export async function setBackendUrl(url: string) {
+  const normalizedUrl = url.trim();
+  if (normalizedUrl) {
+    // Ensure it has protocol
+    const urlToStore = normalizedUrl.startsWith('http') ? normalizedUrl : `https://${normalizedUrl}`;
+    API_BASE = urlToStore;
+    await AsyncStorage.setItem('backend_url', urlToStore);
+  }
+}
+
+export async function getBackendUrl() {
+  await loadBackendUrl();
+  return API_BASE;
+}
+
+export async function clearBackendUrl() {
+  API_BASE = '';
+  await AsyncStorage.removeItem('backend_url');
+}
+
+export async function testBackendConnection() {
+  await loadBackendUrl();
+  if (!API_BASE) {
+    throw new Error('No backend URL configured');
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/health`, {
+      method: 'GET',
+      timeout: 5000,
+    });
+    return res.ok;
+  } catch (error) {
+    throw new Error('Backend unreachable');
+  }
+}
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   if (!authToken) {
     authToken = await AsyncStorage.getItem('auth_token');
   }
   return authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+}
+
+async function getApiBase(): Promise<string> {
+  await loadBackendUrl();
+  return API_BASE;
 }
 
 export async function setAuthToken(token: string) {
@@ -25,7 +83,9 @@ export async function clearAuthToken() {
 export const api = {
   // ===== AUTHENTICATION =====
   async login(email: string, password: string) {
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
+    const base = await getApiBase();
+    if (!base) throw new Error('Backend not configured. Set backend URL in Settings.');
+    const res = await fetch(`${base}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),

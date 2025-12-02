@@ -8,18 +8,32 @@ import {
   Alert,
   Switch,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MapModule from '../lib/mapModule';
+import * as ApiLib from '../lib/api';
 
 export function SettingsScreen() {
   const [offlineMapStatus, setOfflineMapStatus] = useState<any>(null);
   const [downloading, setDownloading] = useState(false);
+  const [backendUrl, setBackendUrl] = useState('');
+  const [testingBackend, setTestingBackend] = useState(false);
 
   useEffect(() => {
     loadOfflineStatus();
+    loadBackendUrl();
   }, []);
+
+  const loadBackendUrl = async () => {
+    try {
+      const url = await ApiLib.getBackendUrl();
+      setBackendUrl(url);
+    } catch (error) {
+      console.error('Error loading backend URL:', error);
+    }
+  };
 
   const loadOfflineStatus = async () => {
     try {
@@ -78,8 +92,93 @@ export function SettingsScreen() {
     ]);
   };
 
+  const handleSaveBackendUrl = async () => {
+    if (!backendUrl.trim()) {
+      Alert.alert('No URL', 'Please enter a backend URL or leave empty for offline-only mode');
+      return;
+    }
+    try {
+      await ApiLib.setBackendUrl(backendUrl);
+      Alert.alert('Saved', 'Backend URL configured');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save backend URL');
+    }
+  };
+
+  const handleTestBackend = async () => {
+    if (!backendUrl.trim()) {
+      Alert.alert('No URL', 'Please enter a backend URL first');
+      return;
+    }
+    setTestingBackend(true);
+    try {
+      await ApiLib.testBackendConnection();
+      Alert.alert('Connected!', 'Backend is reachable');
+    } catch (error) {
+      Alert.alert('Connection Failed', 'Backend is unreachable. Check URL and try again.');
+    } finally {
+      setTestingBackend(false);
+    }
+  };
+
+  const handleClearBackend = async () => {
+    try {
+      await ApiLib.clearBackendUrl();
+      setBackendUrl('');
+      Alert.alert('Cleared', 'Backend URL removed - app will run offline');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to clear backend URL');
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Backend Configuration</Text>
+        <Text style={styles.infoText} style={{ marginBottom: 12 }}>
+          Configure a backend server to sync data online. Leave empty for offline-only mode.
+        </Text>
+        
+        <TextInput
+          style={styles.input}
+          placeholder="e.g., https://your-domain.com or server.example.com"
+          placeholderTextColor={colors.mutedForeground}
+          value={backendUrl}
+          onChangeText={setBackendUrl}
+          editable={!testingBackend}
+        />
+
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.buttonSmall, styles.buttonPrimary, testingBackend && styles.buttonDisabled]}
+            onPress={handleTestBackend}
+            disabled={testingBackend}
+          >
+            {testingBackend ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Text style={styles.buttonSmallText}>🔗 Test</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.buttonSmall, styles.buttonSuccess]}
+            onPress={handleSaveBackendUrl}
+            disabled={testingBackend}
+          >
+            <Text style={styles.buttonSmallText}>💾 Save</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.buttonSmall, styles.buttonDanger]}
+            onPress={handleClearBackend}
+            disabled={testingBackend}
+          >
+            <Text style={styles.buttonSmallText}>🗑️ Clear</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Offline Maps</Text>
         
@@ -144,6 +243,45 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.foreground,
     marginBottom: 12,
+  },
+  input: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.foreground,
+    marginBottom: 12,
+    fontSize: 14,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  buttonSmall: {
+    flex: 1,
+    borderRadius: 6,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  buttonPrimary: {
+    backgroundColor: colors.primary,
+  },
+  buttonSuccess: {
+    backgroundColor: '#10b981',
+  },
+  buttonDanger: {
+    backgroundColor: colors.destructive,
+  },
+  buttonSmallText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   statusCard: {
     backgroundColor: colors.card,

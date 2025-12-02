@@ -1,6 +1,6 @@
 # FiberTrace Mobile - PRODUCTION READY ✅
 
-**Latest Update:** November 30, 2025 - **ALL TESTS PASSING: 27/27**
+**Latest Update:** December 2, 2025 - **OFFLINE-FIRST WITH CONFIGURABLE BACKEND**
 
 ## 🎯 FINAL STATUS: 100% COMPLETE & TESTED
 
@@ -156,9 +156,12 @@ tool_usage_logs, daily_reports
 - ✅ Offline queue scaffolding
 - ✅ Background sync ready
 - ✅ Conflict resolution framework
-- ✅ **NEW: Offline Map Tiles Caching** - Download maps for offline use
+- ✅ **Offline Map Tiles Caching** - Download maps for offline use
 - ✅ **Settings: Predownload maps for your area (WiFi recommended)**
 - ✅ Map tiles cached locally (7-day expiry)
+- ✅ **NEW: Configurable Backend URL** - Set backend in Settings screen
+- ✅ **NEW: Backend Connection Testing** - Verify backend is reachable
+- ✅ **NEW: Works 100% offline without backend URL set**
 
 ---
 
