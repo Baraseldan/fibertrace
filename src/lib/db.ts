@@ -1,6 +1,4 @@
-// Local SQLite database for self-contained offline operation
 import * as SQLite from 'expo-sqlite';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as bcrypt from 'bcryptjs';
 
 const DB = SQLite.openDatabase('fibertrace.db');
@@ -12,7 +10,6 @@ export async function initializeDatabase() {
   
   return new Promise((resolve, reject) => {
     DB.transaction(tx => {
-      // Users table
       tx.executeSql(
         `CREATE TABLE IF NOT EXISTS users (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,7 +23,6 @@ export async function initializeDatabase() {
         );`
       );
 
-      // Routes table
       tx.executeSql(
         `CREATE TABLE IF NOT EXISTS routes (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,7 +36,6 @@ export async function initializeDatabase() {
         );`
       );
 
-      // Nodes table
       tx.executeSql(
         `CREATE TABLE IF NOT EXISTS nodes (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +52,6 @@ export async function initializeDatabase() {
         );`
       );
 
-      // Jobs table
       tx.executeSql(
         `CREATE TABLE IF NOT EXISTS jobs (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,7 +69,6 @@ export async function initializeDatabase() {
         );`
       );
 
-      // Closures table
       tx.executeSql(
         `CREATE TABLE IF NOT EXISTS closures (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,7 +83,6 @@ export async function initializeDatabase() {
         );`
       );
 
-      // Splices table
       tx.executeSql(
         `CREATE TABLE IF NOT EXISTS splices (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,7 +96,6 @@ export async function initializeDatabase() {
         );`
       );
 
-      // Inventory table
       tx.executeSql(
         `CREATE TABLE IF NOT EXISTS inventory (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,7 +108,6 @@ export async function initializeDatabase() {
         );`
       );
 
-      // Customers table
       tx.executeSql(
         `CREATE TABLE IF NOT EXISTS customers (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,7 +134,6 @@ export async function initializeDatabase() {
 }
 
 async function seedInitialData() {
-  // Check if users already exist
   return new Promise(resolve => {
     DB.transaction(tx => {
       tx.executeSql(
@@ -152,7 +141,6 @@ async function seedInitialData() {
         [],
         (_, result) => {
           if (result.rows._array[0].count === 0) {
-            // Hash passwords
             const adminHash = bcrypt.hashSync('admin123456', 10);
             const techHash = bcrypt.hashSync('tech123456', 10);
             const fieldHash = bcrypt.hashSync('field123456', 10);
@@ -165,7 +153,6 @@ async function seedInitialData() {
               [adminHash, techHash, fieldHash]
             );
 
-            // Add sample routes
             tx.executeSql(
               `INSERT INTO routes (name, route_type, status, length_meters, description) VALUES 
               ('Main Backbone Route', 'Backbone', 'active', 15000, 'Primary fiber route'),
@@ -173,7 +160,6 @@ async function seedInitialData() {
               ('Access Network B', 'Access', 'active', 3200, 'End user access route');`
             );
 
-            // Add sample nodes
             tx.executeSql(
               `INSERT INTO nodes (name, node_type, latitude, longitude, power_rating, status, route_id) VALUES 
               ('OLT Central', 'OLT', 37.7749, -122.4194, 48, 'active', 1),
@@ -181,7 +167,6 @@ async function seedInitialData() {
               ('FAT Hub', 'FAT', 37.7751, -122.4196, 12, 'active', 2);`
             );
 
-            // Add sample jobs
             tx.executeSql(
               `INSERT INTO jobs (title, description, status, assigned_to, route_id, priority) VALUES 
               ('Fiber Installation', 'Install new fiber segment', 'pending', 2, 1, 'high'),
@@ -195,7 +180,6 @@ async function seedInitialData() {
   });
 }
 
-// AUTH OPERATIONS
 export async function registerUser(data: { full_name: string; email: string; phone?: string; password: string; role?: string }) {
   return new Promise((resolve, reject) => {
     DB.transaction(tx => {
@@ -205,15 +189,16 @@ export async function registerUser(data: { full_name: string; email: string; pho
         [data.full_name, data.email, data.phone || '', passwordHash, data.role || 'technician'],
         (_, result) => {
           const user = {
-            id: result.insertRowId,
+            id: result.insertId,
             full_name: data.full_name,
             email: data.email,
             role: data.role || 'technician',
           };
           resolve({ success: true, user });
         },
-        error => {
+        (_, error) => {
           reject({ success: false, error: error.message });
+          return false;
         }
       );
     });
@@ -249,15 +234,15 @@ export async function loginUser(email: string, password: string) {
 
           resolve({ success: true, user: userData });
         },
-        error => {
+        (_, error) => {
           reject({ success: false, error: error.message });
+          return false;
         }
       );
     });
   });
 }
 
-// ROUTES OPERATIONS
 export async function getRoutes() {
   return new Promise((resolve, reject) => {
     DB.transaction(tx => {
@@ -267,8 +252,9 @@ export async function getRoutes() {
         (_, result) => {
           resolve({ routes: result.rows._array });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
@@ -288,8 +274,9 @@ export async function getRoute(id: number) {
           }
           resolve(result.rows._array[0]);
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
@@ -304,12 +291,13 @@ export async function createRoute(data: any) {
         [data.name, data.route_type, data.status || 'active', data.length_meters || 0, data.description || ''],
         (_, result) => {
           resolve({
-            id: result.insertRowId,
+            id: result.insertId,
             ...data,
           });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
@@ -325,8 +313,9 @@ export async function updateRoute(id: number, data: any) {
         () => {
           resolve({ id, ...data });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
@@ -342,15 +331,15 @@ export async function deleteRoute(id: number) {
         () => {
           resolve({ success: true });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
   });
 }
 
-// NODES OPERATIONS
 export async function getNodes() {
   return new Promise((resolve, reject) => {
     DB.transaction(tx => {
@@ -360,8 +349,9 @@ export async function getNodes() {
         (_, result) => {
           resolve({ nodes: result.rows._array });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
@@ -381,8 +371,9 @@ export async function getNode(id: number) {
           }
           resolve(result.rows._array[0]);
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
@@ -397,12 +388,13 @@ export async function createNode(data: any) {
         [data.name, data.node_type, data.latitude || 0, data.longitude || 0, data.power_rating || 0, data.status || 'active', data.route_id || null],
         (_, result) => {
           resolve({
-            id: result.insertRowId,
+            id: result.insertId,
             ...data,
           });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
@@ -418,15 +410,15 @@ export async function updateNode(id: number, data: any) {
         () => {
           resolve({ id, ...data });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
   });
 }
 
-// JOBS OPERATIONS
 export async function getJobs() {
   return new Promise((resolve, reject) => {
     DB.transaction(tx => {
@@ -436,8 +428,9 @@ export async function getJobs() {
         (_, result) => {
           resolve({ jobs: result.rows._array });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
@@ -457,8 +450,9 @@ export async function getJob(id: number) {
           }
           resolve(result.rows._array[0]);
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
@@ -473,12 +467,13 @@ export async function createJob(data: any) {
         [data.title, data.description || '', data.status || 'pending', data.assigned_to || null, data.route_id || null, data.priority || 'normal', data.due_date || null],
         (_, result) => {
           resolve({
-            id: result.insertRowId,
+            id: result.insertId,
             ...data,
           });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
@@ -494,15 +489,15 @@ export async function updateJob(id: number, data: any) {
         () => {
           resolve({ id, ...data });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
   });
 }
 
-// CLOSURES OPERATIONS
 export async function getClosures() {
   return new Promise((resolve, reject) => {
     DB.transaction(tx => {
@@ -512,8 +507,9 @@ export async function getClosures() {
         (_, result) => {
           resolve({ closures: result.rows._array });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
@@ -528,19 +524,19 @@ export async function createClosure(data: any) {
         [data.name, data.location || '', data.fiber_count || 0, data.status || 'active', data.route_id || null],
         (_, result) => {
           resolve({
-            id: result.insertRowId,
+            id: result.insertId,
             ...data,
           });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
   });
 }
 
-// INVENTORY OPERATIONS
 export async function getInventory() {
   return new Promise((resolve, reject) => {
     DB.transaction(tx => {
@@ -550,8 +546,9 @@ export async function getInventory() {
         (_, result) => {
           resolve({ inventory: result.rows._array });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
@@ -566,19 +563,19 @@ export async function createInventoryItem(data: any) {
         [data.name, data.quantity || 0, data.location || '', data.status || 'available'],
         (_, result) => {
           resolve({
-            id: result.insertRowId,
+            id: result.insertId,
             ...data,
           });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
   });
 }
 
-// MAP DATA
 export async function getMapData() {
   return new Promise((resolve, reject) => {
     DB.transaction(tx => {
@@ -593,15 +590,15 @@ export async function getMapData() {
             routes: result.rows._array,
           });
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });
   });
 }
 
-// STATS
 export async function getStats() {
   return new Promise((resolve, reject) => {
     DB.transaction(tx => {
@@ -615,8 +612,9 @@ export async function getStats() {
         (_, result) => {
           resolve(result.rows._array[0]);
         },
-        error => {
+        (_, error) => {
           reject(error);
+          return false;
         }
       );
     });

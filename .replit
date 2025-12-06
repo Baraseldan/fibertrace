@@ -17,7 +17,7 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 33391
+localPort = 35481
 externalPort = 3000
 
 [env]
@@ -33,10 +33,10 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "FiberTrace Backend"
+args = "FiberTrace Mobile"
 
 [[workflows.workflow]]
-name = "FiberTrace Backend"
+name = "FiberTrace Mobile"
 author = "agent"
 
 [workflows.workflow.metadata]
@@ -44,7 +44,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd backend && npm install --silent && npm run dev"
+args = "npx --yes expo start --web --port 5000"
 waitForPort = 5000
 
 [agent]
